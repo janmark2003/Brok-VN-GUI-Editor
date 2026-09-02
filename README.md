@@ -160,31 +160,16 @@ EVENT=S01_SCENE_START
 
 ---
 
-## 🚀 Installation & Running
+## 🚀 Download & Running the Standalone Application
 
-### 📦 Standalone Windows Executable (No Java Required)
-1. Download the latest release package: [`BrokVnGuiEditor-v2.0.0-windows-x64.zip`](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases/latest).
-2. Extract the ZIP archive anywhere on your PC.
-3. Double-click **`BrokVnGuiEditor.exe`** to launch immediately.
+### 📦 Windows x64 Executable (`BrokVnGuiEditor.exe`)
+The software is distributed as a **fully self-contained Windows application**. **No Java installation, no batch (`.bat`) building, and no terminal commands are required.**
 
-### 🛠️ Running / Building from Source
-If you wish to compile or develop from source:
-```bash
-# Clone the repository
-git clone https://github.com/janmark2003/Brok-VN-GUI-Editor.git
-cd Brok-VN-GUI-Editor
+1. **Download**: Grab the latest release package: [**`BrokVnGuiEditor-v2.0.0-windows-x64.zip`**](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases).
+2. **Extract**: Extract the `.zip` archive to any folder on your PC.
+3. **Launch**: Double-click **`BrokVnGuiEditor.exe`** to start the editor immediately.
 
-# Compile Java classes
-javac -encoding UTF-8 BrokVnClickAreaWindow.java Main.java
-
-# Launch software
-javaw -cp . BrokVnClickAreaWindow
-```
-
-To package a standalone `.exe` using `jpackage`:
-```cmd
-build_exe.bat
-```
+> **Note**: The application includes its own embedded, lightweight Windows runtime so it runs natively out-of-the-box on any Windows 10/11 system.
 
 ---
 
