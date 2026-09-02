@@ -1570,21 +1570,29 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel zoomPnl = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         zoomPnl.setOpaque(false);
 
-        JButton btnZoomOut = new JButton(" - ");
+        JButton btnZoomOut = new JButton("-");
         styleStandardButton(btnZoomOut);
-        btnZoomOut.setPreferredSize(new Dimension(32, 22));
+        btnZoomOut.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        btnZoomOut.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(cBorder, 1),
+                new EmptyBorder(1, 6, 1, 6)));
+        btnZoomOut.setPreferredSize(new Dimension(36, 24));
         btnZoomOut.setToolTipText("Zoom Out (Scroll Down or Ctrl+Minus)");
         btnZoomOut.addActionListener(e -> { if (canvas != null) canvas.zoomOut(); });
 
-        JButton btnZoomIn = new JButton(" + ");
+        JButton btnZoomIn = new JButton("+");
         styleStandardButton(btnZoomIn);
-        btnZoomIn.setPreferredSize(new Dimension(32, 22));
+        btnZoomIn.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        btnZoomIn.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(cBorder, 1),
+                new EmptyBorder(1, 6, 1, 6)));
+        btnZoomIn.setPreferredSize(new Dimension(36, 24));
         btnZoomIn.setToolTipText("Zoom In (Scroll Up or Ctrl+Plus)");
         btnZoomIn.addActionListener(e -> { if (canvas != null) canvas.zoomIn(); });
 
         JButton btnZoomReset = new JButton("100% / Reset");
         styleStandardButton(btnZoomReset);
-        btnZoomReset.setPreferredSize(new Dimension(96, 22));
+        btnZoomReset.setPreferredSize(new Dimension(96, 24));
         btnZoomReset.setToolTipText("Reset Zoom to 100% and Center Canvas (Double Click or Ctrl+0)");
         btnZoomReset.addActionListener(e -> { if (canvas != null) canvas.resetZoomAndPan(); });
 
@@ -5990,12 +5998,24 @@ public class BrokVnClickAreaWindow extends JFrame {
         featBox.add(txtFeat, BorderLayout.CENTER);
         mainPnl.add(featBox);
 
-        mainPnl.add(Box.createVerticalStrut(14));
+        // Put mainPnl in a scroll pane so content is fully accessible on any screen/DPI
+        JScrollPane scrollPane = new JScrollPane(mainPnl);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(14);
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+        dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
 
-        // Links and Button Bar
-        JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        btnBar.setBackground(cPanelBg);
-        btnBar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // Links and Button Bar - permanently pinned at SOUTH so it NEVER cuts off
+        JPanel bottomPnl = new JPanel(new BorderLayout());
+        bottomPnl.setBackground(cPanelBg);
+        bottomPnl.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, cBorder),
+                BorderFactory.createEmptyBorder(12, 16, 14, 16)
+        ));
+
+        JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        btnBar.setOpaque(false);
 
         JButton btnGh = new JButton("Visit GitHub Repo");
         stylePrimaryButton(btnGh, new Color(40, 110, 180));
@@ -6012,11 +6032,11 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnBar.add(btnGh);
         btnBar.add(btnCowcat);
         btnBar.add(btnClose);
-        mainPnl.add(btnBar);
+        bottomPnl.add(btnBar, BorderLayout.EAST);
+        dlg.getContentPane().add(bottomPnl, BorderLayout.SOUTH);
 
-        dlg.getContentPane().add(mainPnl, BorderLayout.CENTER);
         dlg.pack();
-        dlg.setSize(640, 540);
+        dlg.setSize(660, 620);
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
     }
