@@ -33,7 +33,7 @@ import java.util.prefs.Preferences;
 public class BrokVnClickAreaWindow extends JFrame {
 
     public static final String APP_NAME = "BrokVN GUI Editor";
-    public static final String APP_VERSION = "v1.3.0";
+    public static final String APP_VERSION = "v2.0.0";
     public static final String GITHUB_REPO = "janmark2003/Brok-VN-GUI-Editor";
     public static final String UPDATE_CHECK_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 
@@ -1487,6 +1487,23 @@ public class BrokVnClickAreaWindow extends JFrame {
         mTools.add(miGlueIt);
         mTools.add(miClear);
 
+        JMenu mSettings = new JMenu("Settings");
+        mSettings.setForeground(cFg);
+
+        JMenuItem miSetAbout = new JMenuItem("About & Credits...");
+        miSetAbout.addActionListener(e -> showAboutDialog());
+
+        JMenuItem miSetDoc = new JMenuItem("Brok VN Engine Documentation (HTML)...");
+        miSetDoc.addActionListener(e -> openDocumentationHtml());
+
+        JMenuItem miSetUpdate = new JMenuItem("Check for Updates...");
+        miSetUpdate.addActionListener(e -> showUpdateDialog(true));
+
+        mSettings.add(miSetAbout);
+        mSettings.addSeparator();
+        mSettings.add(miSetDoc);
+        mSettings.add(miSetUpdate);
+
         JMenu mHelp = new JMenu("Help");
         mHelp.setForeground(cFg);
 
@@ -1496,7 +1513,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         JMenuItem miCheckUpdate = new JMenuItem("Check for Updates...");
         miCheckUpdate.addActionListener(e -> showUpdateDialog(true));
 
-        JMenuItem miAbout = new JMenuItem("About " + APP_NAME);
+        JMenuItem miAbout = new JMenuItem("About & Credits (" + APP_NAME + ")");
         miAbout.addActionListener(e -> showAboutDialog());
 
         mHelp.add(miDoc);
@@ -1507,6 +1524,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         mb.add(mFile);
         mb.add(mView);
         mb.add(mTools);
+        mb.add(mSettings);
         mb.add(mHelp);
         return mb;
     }
@@ -5885,16 +5903,118 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
     }
 
+    private void openBrowserUrl(String url) {
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(new URI(url));
+            } else {
+                Runtime.getRuntime().exec("rundll32 url.dll,FileProtocolHandler " + url);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Could not open link:\n" + url + "\nError: " + e.getMessage(), "Link Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void showAboutDialog() {
-        JOptionPane.showMessageDialog(this,
-                APP_NAME + " " + APP_VERSION + "\n\n"
-                        + "Dedicated Visual Novel Clickable Area Studio, Character Sprite Placement,\n"
-                        + "Multi-Waypoint Walk Paths (A->B->C...), Layer System & Full Screen Preview.\n\n"
-                        + "Connected Repository: " + GITHUB_REPO + "\n"
-                        + "Engine Resolution: 1920x1080 Native\n"
-                        + "Features: Draggable Waypoints, In-App GitHub Auto-Updater, Project Save/Load (.brokproj),\n"
-                        + "Draggable Character Badges, Free Frame Overlap, and Overall BrokVN Scene Script Generator.",
-                "About " + APP_NAME, JOptionPane.INFORMATION_MESSAGE);
+        JDialog dlg = new JDialog(this, "About & Credits - " + APP_NAME, true);
+        dlg.setLayout(new BorderLayout());
+        dlg.getContentPane().setBackground(cPanelBg);
+
+        JPanel mainPnl = new JPanel();
+        mainPnl.setLayout(new BoxLayout(mainPnl, BoxLayout.Y_AXIS));
+        mainPnl.setBackground(cPanelBg);
+        mainPnl.setBorder(BorderFactory.createEmptyBorder(16, 20, 16, 20));
+
+        // Header Panel with Title & Version
+        JLabel lblTitle = new JLabel(APP_NAME + " " + APP_VERSION);
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        lblTitle.setForeground(new Color(0, 195, 255));
+        lblTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+        mainPnl.add(lblTitle);
+
+        JLabel lblSubtitle = new JLabel("Visual Novel Scene Editor & Clickable Coordinate Studio (1920x1080 Native Canvas)");
+        lblSubtitle.setFont(new Font("Segoe UI", Font.ITALIC, 13));
+        lblSubtitle.setForeground(cFgSubdued);
+        lblSubtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+        mainPnl.add(lblSubtitle);
+
+        mainPnl.add(Box.createVerticalStrut(14));
+
+        // Credits Box
+        JPanel credBox = new JPanel(new GridLayout(2, 1, 6, 8));
+        credBox.setBackground(isDarkMode ? new Color(28, 30, 36) : new Color(245, 246, 250));
+        credBox.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(0, 195, 255), 1),
+                BorderFactory.createEmptyBorder(12, 14, 12, 14)
+        ));
+        credBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblJanmark = new JLabel("<html><b style='font-size:13px;'>Creator & Lead Developer:</b> <font color='#00C3FF' style='font-size:13px; font-weight:bold;'>Janmark Abo</font><br/><span style='font-size:11px; color:#A0A6B8;'>Software Architecture, UI/UX Engineering & GUI Scene Editor Design</span></html>");
+        lblJanmark.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblJanmark.setForeground(cFg);
+        credBox.add(lblJanmark);
+
+        JLabel lblCowcat = new JLabel("<html><b style='font-size:13px;'>Visual Novel Engine & Original Game:</b> <font color='#FFB800' style='font-size:13px; font-weight:bold;'>COWCAT Games (Fabrice Breton)</font><br/><span style='font-size:11px; color:#A0A6B8;'>Creator of BROK the InvestiGator & the Brok Visual Novel Script Engine</span></html>");
+        lblCowcat.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblCowcat.setForeground(cFg);
+        credBox.add(lblCowcat);
+
+        mainPnl.add(credBox);
+        mainPnl.add(Box.createVerticalStrut(14));
+
+        // Features & Capabilities
+        JPanel featBox = new JPanel(new BorderLayout());
+        featBox.setBackground(isDarkMode ? new Color(24, 25, 30) : new Color(250, 250, 252));
+        styleTitledBorder(featBox, "Engine Capabilities & Specifications");
+        featBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JEditorPane txtFeat = new JEditorPane();
+        txtFeat.setContentType("text/html");
+        txtFeat.setEditable(false);
+        txtFeat.setBackground(featBox.getBackground());
+        txtFeat.setText("<html><body style='font-family: Segoe UI, sans-serif; font-size: 11px; color: " + (isDarkMode ? "#D0D4E0" : "#222222") + ";'>"
+                + "<ul style='margin-left: 14px; padding-left: 0;'>"
+                + "<li><b>CLICKERNEW:</b> Interactive rectangular hotspot dragging, image model clickers, hover highlights, examine events.</li>"
+                + "<li><b>IMAGENEW:</b> Character spritesheet slicing, real-time animation loop, multi-frame scrubber, anchor origin alignment.</li>"
+                + "<li><b>IMAGEMOVE:</b> Interactive multi-point walk paths (Point A &rarr; B &rarr; C...) with draggable pins & smooth trajectory.</li>"
+                + "<li><b>TEXTNEW / TEXTMODEL:</b> In-scene dialogue placement, font/color selection, clickable text with hover glow & triggers.</li>"
+                + "<li><b>Canvas Studio:</b> Smooth mouse wheel zooming (20% &ndash; 1000%), middle-click canvas dragging/panning, unbounded coordinates.</li>"
+                + "<li><b>Layer Manager:</b> Real-time sprite & text visibility checkboxes, depth sorting, and complete BrokVN file generation.</li>"
+                + "</ul>"
+                + "</body></html>");
+        txtFeat.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+        featBox.add(txtFeat, BorderLayout.CENTER);
+        mainPnl.add(featBox);
+
+        mainPnl.add(Box.createVerticalStrut(14));
+
+        // Links and Button Bar
+        JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        btnBar.setBackground(cPanelBg);
+        btnBar.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JButton btnGh = new JButton("Visit GitHub Repo");
+        stylePrimaryButton(btnGh, new Color(40, 110, 180));
+        btnGh.addActionListener(e -> openBrowserUrl("https://github.com/" + GITHUB_REPO));
+
+        JButton btnCowcat = new JButton("COWCAT Official Site");
+        stylePrimaryButton(btnCowcat, new Color(180, 110, 30));
+        btnCowcat.addActionListener(e -> openBrowserUrl("https://www.cowcatgames.com"));
+
+        JButton btnClose = new JButton("Close");
+        stylePrimaryButton(btnClose, new Color(80, 85, 95));
+        btnClose.addActionListener(e -> dlg.dispose());
+
+        btnBar.add(btnGh);
+        btnBar.add(btnCowcat);
+        btnBar.add(btnClose);
+        mainPnl.add(btnBar);
+
+        dlg.getContentPane().add(mainPnl, BorderLayout.CENTER);
+        dlg.pack();
+        dlg.setSize(640, 540);
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
     }
 
     // =========================================================================
