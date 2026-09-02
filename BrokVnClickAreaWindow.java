@@ -391,10 +391,10 @@ public class BrokVnClickAreaWindow extends JFrame {
             int walkDist = 1248; // 65% width
             int bx;
             if (ax > 960) {
-                bx = Math.max(150, ax - walkDist);
+                bx = ax - walkDist;
                 this.flipH = true;
             } else {
-                bx = Math.min(1770, ax + walkDist);
+                bx = ax + walkDist;
                 this.flipH = false;
             }
             waypoints.add(new Waypoint("Point A", ax, ay, 25, ""));
@@ -1736,12 +1736,12 @@ public class BrokVnClickAreaWindow extends JFrame {
         coordBox.setBackground(cPanelBg);
         styleTitledBorder(coordBox, "Clicker Coordinates (CLICKERNEW X1, Y1, X2, Y2)");
 
-        spX1 = new JSpinner(new SpinnerNumberModel(curX1, -3000, 5000, 1));
-        spY1 = new JSpinner(new SpinnerNumberModel(curY1, -3000, 5000, 1));
-        spX2 = new JSpinner(new SpinnerNumberModel(curX2, -3000, 5000, 1));
-        spY2 = new JSpinner(new SpinnerNumberModel(curY2, -3000, 5000, 1));
-        spWidth = new JSpinner(new SpinnerNumberModel(curX2 - curX1, 1, 8000, 1));
-        spHeight = new JSpinner(new SpinnerNumberModel(curY2 - curY1, 1, 8000, 1));
+        spX1 = new JSpinner(new SpinnerNumberModel(Integer.valueOf(curX1), null, null, Integer.valueOf(1)));
+        spY1 = new JSpinner(new SpinnerNumberModel(Integer.valueOf(curY1), null, null, Integer.valueOf(1)));
+        spX2 = new JSpinner(new SpinnerNumberModel(Integer.valueOf(curX2), null, null, Integer.valueOf(1)));
+        spY2 = new JSpinner(new SpinnerNumberModel(Integer.valueOf(curY2), null, null, Integer.valueOf(1)));
+        spWidth = new JSpinner(new SpinnerNumberModel(Integer.valueOf(Math.max(1, curX2 - curX1)), Integer.valueOf(1), null, Integer.valueOf(1)));
+        spHeight = new JSpinner(new SpinnerNumberModel(Integer.valueOf(Math.max(1, curY2 - curY1)), Integer.valueOf(1), null, Integer.valueOf(1)));
 
         styleSpinner(spX1);
         styleSpinner(spY1);
@@ -1851,7 +1851,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         txtId = new JTextField("CLICK_INTERACTION");
         txtEvent = new JTextField("S01_EXAMINE_ITEM");
         txtText = new JTextField("Inspect Item");
-        spClickerLayer = new JSpinner(new SpinnerNumberModel(0, 0, 50, 1));
+        spClickerLayer = new JSpinner(new SpinnerNumberModel(Integer.valueOf(0), null, null, Integer.valueOf(1)));
 
         styleTextField(txtId);
         styleTextField(txtEvent);
@@ -2033,8 +2033,8 @@ public class BrokVnClickAreaWindow extends JFrame {
         txtImageId.addKeyListener(keySync);
         txtImageFile.addKeyListener(keySync);
 
-        spImgX = new JSpinner(new SpinnerNumberModel(254, -3000, 5000, 1));
-        spImgY = new JSpinner(new SpinnerNumberModel(380, -3000, 5000, 1));
+        spImgX = new JSpinner(new SpinnerNumberModel(Integer.valueOf(254), null, null, Integer.valueOf(1)));
+        spImgY = new JSpinner(new SpinnerNumberModel(Integer.valueOf(380), null, null, Integer.valueOf(1)));
         styleSpinner(spImgX);
         styleSpinner(spImgY);
 
@@ -2071,12 +2071,12 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         });
 
-        spImageDepth = new JSpinner(new SpinnerNumberModel(1, -100, 100, 1));
+        spImageDepth = new JSpinner(new SpinnerNumberModel(Integer.valueOf(1), null, null, Integer.valueOf(1)));
         styleSpinner(spImageDepth);
         spImageDepth.setEnabled(false);
         spImageDepth.addChangeListener(imgSpinnerListener);
 
-        spImageScale = new JSpinner(new SpinnerNumberModel(100, 1, 500, 1));
+        spImageScale = new JSpinner(new SpinnerNumberModel(Integer.valueOf(100), Integer.valueOf(1), null, Integer.valueOf(1)));
         styleSpinner(spImageScale);
 
         sldImageScale = new JSlider(10, 200, 100);
@@ -2332,9 +2332,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         styleComboBox(cmbWaypointSelector);
         cmbWaypointSelector.addItemListener(e -> syncWaypointUiFromSelection());
 
-        spSelectedWpX = new JSpinner(new SpinnerNumberModel(250, -3000, 5000, 1));
-        spSelectedWpY = new JSpinner(new SpinnerNumberModel(560, -3000, 5000, 1));
-        spSelectedWpSpeed = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
+        spSelectedWpX = new JSpinner(new SpinnerNumberModel(Integer.valueOf(250), null, null, Integer.valueOf(1)));
+        spSelectedWpY = new JSpinner(new SpinnerNumberModel(Integer.valueOf(560), null, null, Integer.valueOf(1)));
+        spSelectedWpSpeed = new JSpinner(new SpinnerNumberModel(Integer.valueOf(25), Integer.valueOf(1), null, Integer.valueOf(1)));
         txtSelectedWpEvent = new JTextField("S01_ARRIVED");
 
         styleSpinner(spSelectedWpX);
@@ -2492,7 +2492,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         txtImgClickEvent = new JTextField("S00_CHAPTER_NEXT");
         chkImgPrecise = new JCheckBox("PRECISE=1 (Pixel-Perfect Hitbox)", true);
         txtImgClickerText = new JTextField("");
-        spImgClickerLayer = new JSpinner(new SpinnerNumberModel(0, 0, 50, 1));
+        spImgClickerLayer = new JSpinner(new SpinnerNumberModel(Integer.valueOf(0), null, null, Integer.valueOf(1)));
 
         styleTextField(txtImgClickerId);
         styleTextField(txtImgClickEvent);
@@ -2620,9 +2620,9 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         txtTextId = new JTextField("MY_TEXT_ID");
         txtTextContent = new JTextField("Hello World!");
-        spTextX = new JSpinner(new SpinnerNumberModel(960, -3000, 5000, 1));
-        spTextY = new JSpinner(new SpinnerNumberModel(540, -3000, 5000, 1));
-        spTextDepth = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
+        spTextX = new JSpinner(new SpinnerNumberModel(Integer.valueOf(960), null, null, Integer.valueOf(1)));
+        spTextY = new JSpinner(new SpinnerNumberModel(Integer.valueOf(540), null, null, Integer.valueOf(1)));
+        spTextDepth = new JSpinner(new SpinnerNumberModel(Integer.valueOf(1), null, null, Integer.valueOf(1)));
 
         styleTextField(txtTextId);
         styleTextField(txtTextContent);
@@ -2747,7 +2747,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         txtTextClickerHover = new JTextField("CRUCK CRUCK INNA MERST");
         txtTextClickEvent = new JTextField("S01_TEXT_CLICKED");
         chkTextClickerHighlight = new JCheckBox("HIGHLIGHT=1 (Glow/Highlight text when clickable)", true);
-        spTextClickerLayer = new JSpinner(new SpinnerNumberModel(0, 0, 50, 1));
+        spTextClickerLayer = new JSpinner(new SpinnerNumberModel(Integer.valueOf(0), null, null, Integer.valueOf(1)));
 
         styleTextField(txtTextClickerId);
         styleTextField(txtTextClickerHover);
