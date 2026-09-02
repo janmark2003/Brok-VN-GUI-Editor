@@ -850,8 +850,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         applyUiManagerDefaults();
 
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(1520, 960);
+        setSize(1600, 980);
         setMinimumSize(new Dimension(1140, 750));
+        setExtendedState(JFrame.MAXIMIZED_BOTH); // Open as full window / maximized by default
         setLocationRelativeTo(parent);
 
         buildUi();
@@ -868,6 +869,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         SwingUtilities.invokeLater(() -> {
             BrokVnClickAreaWindow window = new BrokVnClickAreaWindow();
             window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            window.setExtendedState(JFrame.MAXIMIZED_BOTH);
             window.setVisible(true);
         });
     }
@@ -1360,12 +1362,28 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel canvasContainer = buildCanvasContainer();
         JPanel rightPanel = buildRightPanel();
 
+        canvasContainer.setMinimumSize(new Dimension(480, 360));
+        rightPanel.setMinimumSize(new Dimension(460, 360));
+
         JSplitPane splitMain = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, canvasContainer, rightPanel);
         splitMain.setBackground(cBg);
         splitMain.setDividerSize(6);
-        splitMain.setResizeWeight(0.56);
+        splitMain.setContinuousLayout(true);
+        splitMain.setResizeWeight(0.68); // 68% for canvas, 32% for tools
         splitMain.setBorder(null);
-        splitMain.setDividerLocation(850);
+
+        // Dynamically compute optimal divider location giving maximum space to editor canvas
+        SwingUtilities.invokeLater(() -> {
+            int totalW = splitMain.getWidth();
+            if (totalW > 900) {
+                // Keep right tools at a comfortable 520px without any tool compromise,
+                // and allocate all remaining width to the 1920x1080 canvas!
+                int rightToolWidth = Math.max(480, Math.min(540, (int) Math.round(totalW * 0.30)));
+                splitMain.setDividerLocation(totalW - rightToolWidth);
+            } else {
+                splitMain.setDividerLocation(0.68);
+            }
+        });
 
         root.add(topBar, BorderLayout.NORTH);
         root.add(splitMain, BorderLayout.CENTER);
