@@ -1084,12 +1084,20 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnBringPointBToolbar.addActionListener(e -> bringPointBToScreen());
 
         row2Right.add(btnBringPointBToolbar);
-        row2Right.add(Box.createHorizontalStrut(4));
-        row2Right.add(chkShowOverlays);
-        row2Right.add(chkShowGrid);
-        row2Right.add(chkShowAllClickers);
-        row2Right.add(chkShowWaypoints);
-        chkShowWaypoints.addActionListener(e -> canvas.repaint());
+        chkShowOverlays = new JCheckBox("Show Sprites", true);
+        chkShowGrid = new JCheckBox("Grid", true);
+        chkShowAllClickers = new JCheckBox("Clicker Outlines", true);
+        chkShowWaypoints = new JCheckBox("Waypoints", true);
+
+        styleCheckBox(chkShowOverlays);
+        styleCheckBox(chkShowGrid);
+        styleCheckBox(chkShowAllClickers);
+        styleCheckBox(chkShowWaypoints);
+
+        chkShowOverlays.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
+        chkShowGrid.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
+        chkShowAllClickers.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
+        chkShowWaypoints.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
 
         row2Right.add(chkShowOverlays);
         row2Right.add(chkShowGrid);
