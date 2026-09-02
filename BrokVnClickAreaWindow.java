@@ -2546,8 +2546,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         propBox.add(txtTextId, gbc);
 
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.35;
-        propBox.add(createStyledLabel("Content (TEXT):"), gbc);
+        propBox.add(createStyledLabel("Text to Type (TEXT=):"), gbc);
         gbc.gridx = 1; gbc.gridy = 1; gbc.weightx = 0.65;
+        txtTextContent.setToolTipText("Enter the text string that will appear in the game scene at this position.");
         propBox.add(txtTextContent, gbc);
 
         gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.35;
@@ -2593,8 +2594,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         tgbc.insets = new Insets(3, 4, 3, 4);
         tgbc.fill = GridBagConstraints.HORIZONTAL;
 
-        chkTextIsClicker = new JCheckBox("Enable Text as Clicker Hotspot", false);
+        chkTextIsClicker = new JCheckBox("Enable Clickable Text (TEXTMODEL)", false);
         styleCheckBox(chkTextIsClicker);
+        chkTextIsClicker.setToolTipText("Convert this text into an interactive clicker hotspot in the visual novel");
         chkTextIsClicker.addActionListener(e -> {
             syncActiveTextFromUi();
             refreshLayerTable();
@@ -2603,7 +2605,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         txtTextClickerId = new JTextField("CLICK_TEXT");
         txtTextClickerHover = new JTextField("CRUCK CRUCK INNA MERST");
         txtTextClickEvent = new JTextField("S01_TEXT_CLICKED");
-        chkTextClickerHighlight = new JCheckBox("HIGHLIGHT=1", true);
+        chkTextClickerHighlight = new JCheckBox("HIGHLIGHT=1 (Glow/Highlight text when clickable)", true);
         spTextClickerLayer = new JSpinner(new SpinnerNumberModel(0, 0, 50, 1));
 
         styleTextField(txtTextClickerId);
@@ -2611,6 +2613,11 @@ public class BrokVnClickAreaWindow extends JFrame {
         styleTextField(txtTextClickEvent);
         styleCheckBox(chkTextClickerHighlight);
         styleSpinner(spTextClickerLayer);
+
+        txtTextClickerId.setToolTipText("Unique ID for the CLICKERNEW definition (e.g. CLICK_TEXT)");
+        txtTextClickerHover.setToolTipText("The text or examine tooltip shown when hovering/highlighting this clickable text");
+        txtTextClickEvent.setToolTipText("Script event executed when the user clicks this text (e.g. S01_TEXT_CLICKED)");
+        chkTextClickerHighlight.setToolTipText("When checked, adds HIGHLIGHT=1 to highlight/glow the text on hover");
 
         txtTextClickerId.addKeyListener(textKeyAdapter);
         txtTextClickerHover.addKeyListener(textKeyAdapter);
@@ -2623,22 +2630,22 @@ public class BrokVnClickAreaWindow extends JFrame {
         tgbc.gridwidth = 1;
 
         tgbc.gridx = 0; tgbc.gridy = 1; tgbc.weightx = 0.35;
-        textModelBox.add(createStyledLabel("Clicker ID:"), tgbc);
+        textModelBox.add(createStyledLabel("Clicker ID (CLICKERNEW):"), tgbc);
         tgbc.gridx = 1; tgbc.gridy = 1; tgbc.weightx = 0.65;
         textModelBox.add(txtTextClickerId, tgbc);
 
         tgbc.gridx = 0; tgbc.gridy = 2; tgbc.weightx = 0.35;
-        textModelBox.add(createStyledLabel("Hover Text (TEXT):"), tgbc);
+        textModelBox.add(createStyledLabel("Text to Highlight (TEXT=):"), tgbc);
         tgbc.gridx = 1; tgbc.gridy = 2; tgbc.weightx = 0.65;
         textModelBox.add(txtTextClickerHover, tgbc);
 
         tgbc.gridx = 0; tgbc.gridy = 3; tgbc.weightx = 0.35;
-        textModelBox.add(createStyledLabel("Event (CLICKEVENT):"), tgbc);
+        textModelBox.add(createStyledLabel("Click Event (CLICKEVENT):"), tgbc);
         tgbc.gridx = 1; tgbc.gridy = 3; tgbc.weightx = 0.65;
         textModelBox.add(txtTextClickEvent, tgbc);
 
         tgbc.gridx = 0; tgbc.gridy = 4; tgbc.weightx = 0.35;
-        textModelBox.add(createStyledLabel("Options:"), tgbc);
+        textModelBox.add(createStyledLabel("Clicker Options:"), tgbc);
         JPanel optPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         optPnl.setOpaque(false);
         optPnl.add(chkTextClickerHighlight);
@@ -6263,6 +6270,15 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
                 int drawTextY = ty;
 
+                // Visual preview of HIGHLIGHT=1 (Golden Glow / Highlight aura behind text)
+                if (txt.isTextModelClicker && txt.clickerHighlight) {
+                    g2.setColor(new Color(255, 215, 0, 75));
+                    g2.fillRoundRect(drawTextX - 6, drawTextY - tfm.getAscent() - 3, strW + 12, strH + 6, 8, 8);
+                    g2.setColor(new Color(255, 220, 0, 160));
+                    g2.setStroke(new BasicStroke(1.2f));
+                    g2.drawRoundRect(drawTextX - 6, drawTextY - tfm.getAscent() - 3, strW + 12, strH + 6, 8, 8);
+                }
+
                 // Drop shadow for crisp readability against any background
                 g2.setColor(new Color(0, 0, 0, 220));
                 g2.drawString(displayStr, drawTextX + 2, drawTextY + 2);
@@ -6290,9 +6306,19 @@ public class BrokVnClickAreaWindow extends JFrame {
                     g2.drawOval(tx - 3, ty - 3, 6, 6);
                 }
 
-                // Attached TEXTMODEL Clicker badge
+                // Attached TEXTMODEL Clicker badge with hover text & highlight indicator
                 if (txt.isTextModelClicker) {
-                    String tBadge = "[TEXTMODEL: " + (txt.clickerId != null && !txt.clickerId.isEmpty() ? txt.clickerId : "CLICK_" + txt.id) + "]";
+                    StringBuilder badgeSb = new StringBuilder("[TEXTMODEL: ");
+                    badgeSb.append(txt.clickerId != null && !txt.clickerId.isEmpty() ? txt.clickerId : "CLICK_" + txt.id);
+                    if (txt.clickerHighlight) {
+                        badgeSb.append(" | HIGHLIGHT: 1");
+                    }
+                    if (txt.clickerHoverText != null && !txt.clickerHoverText.trim().isEmpty()) {
+                        badgeSb.append(" | TEXT: \"").append(txt.clickerHoverText.trim()).append("\"");
+                    }
+                    badgeSb.append("]");
+                    String tBadge = badgeSb.toString();
+
                     g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
                     FontMetrics bfm = g2.getFontMetrics();
                     int bw = bfm.stringWidth(tBadge) + 8;
