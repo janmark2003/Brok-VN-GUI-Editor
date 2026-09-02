@@ -6068,7 +6068,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                                 }
                             }
                         }
-                        if (hitTxt != null && (activeEditTarget == ActiveEditTarget.TEXT || (!hitTxt.text.isEmpty() && hitTxt.contains(engX, engY)))) {
+                        if (hitTxt != null && activeEditTarget == ActiveEditTarget.TEXT) {
                             activeTextObject = hitTxt;
                             activeEditTarget = ActiveEditTarget.TEXT;
                             if (btnTargetText != null) btnTargetText.setSelected(true);
@@ -6099,8 +6099,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // Check Sprite Body (IMAGENEW)
-                        if (chkShowOverlays == null || chkShowOverlays.isSelected()) {
+                        // Check Sprite Body (IMAGENEW) - when in IMAGE mode
+                        if (activeEditTarget == ActiveEditTarget.IMAGE && (chkShowOverlays == null || chkShowOverlays.isSelected())) {
                             OverlayObject hitObj = null;
                             if (activeOverlayObject != null && activeOverlayObject.contains(engX, engY)) {
                                 hitObj = activeOverlayObject;
@@ -6116,28 +6116,29 @@ public class BrokVnClickAreaWindow extends JFrame {
                             if (hitObj != null) {
                                 activeOverlayObject = hitObj;
                                 syncImageUiFromActiveObject();
-                                if (activeEditTarget == ActiveEditTarget.IMAGE) {
-                                    currentDragType = DragHandleType.OVERLAY_SPRITE;
-                                    overlayDragOffsetX = engX - hitObj.x;
-                                    overlayDragOffsetY = engY - hitObj.y;
-                                    lblCursorPos.setText(String.format("Moving Sprite '%s' at [ X: %d, Y: %d ]",
-                                            hitObj.imageId, hitObj.getAnchorX(), hitObj.getAnchorY()));
-                                    repaint();
-                                    return;
-                                }
+                                currentDragType = DragHandleType.OVERLAY_SPRITE;
+                                overlayDragOffsetX = engX - hitObj.x;
+                                overlayDragOffsetY = engY - hitObj.y;
+                                lblCursorPos.setText(String.format("Moving Sprite '%s' at [ X: %d, Y: %d ]",
+                                        hitObj.imageId, hitObj.getAnchorX(), hitObj.getAnchorY()));
+                                repaint();
+                                return;
                             }
                         }
 
-                        // If in CLICKER mode and clicking inside native 1920x1080 canvas bounds, start drawing/dragging clicker box
-                        boolean insideNativeBounds = (engX >= 0 && engX <= 1920 && engY >= 0 && engY <= 1080);
-                        if (activeEditTarget == ActiveEditTarget.CLICKER && insideNativeBounds) {
+                        // Clicker Mode: ALWAYS start drawing/selecting clicker box!
+                        if (activeEditTarget == ActiveEditTarget.CLICKER) {
+                            hasActiveClicker = true;
                             dragStartX = engX;
                             dragStartY = engY;
+                            setBoundsCoordinates(engX, engY, engX, engY);
                             currentDragType = DragHandleType.CLICKER_BOX;
+                            lblCursorPos.setText(String.format("Selecting Clicker Area starting at [ X: %d, Y: %d ]", engX, engY));
+                            repaint();
                             return;
                         }
 
-                        // Otherwise (clicking empty background, outside canvas, or in Image/Text mode): Pan the canvas!
+                        // Otherwise (clicking empty background in Image/Text mode): Pan the canvas!
                         currentDragType = DragHandleType.CANVAS_PAN;
                         panMouseStartX = mouseX;
                         panMouseStartY = mouseY;
@@ -6248,9 +6249,11 @@ public class BrokVnClickAreaWindow extends JFrame {
                     }
                     // E. Dragging Clicker Rectangle
                     else if (currentDragType == DragHandleType.CLICKER_BOX) {
+                        hasActiveClicker = true;
                         setBoundsCoordinates(dragStartX, dragStartY, curX, curY);
-                        lblCursorPos.setText(String.format("Clicker Hotspot -> [ X1: %d, Y1: %d | X2: %d, Y2: %d ]",
-                                curX1, curY1, curX2, curY2));
+                        lblCursorPos.setText(String.format("Clicker Hotspot -> [ X1: %d, Y1: %d | X2: %d, Y2: %d ] (%dx%d px)",
+                                curX1, curY1, curX2, curY2, curX2 - curX1, curY2 - curY1));
+                        repaint();
                     }
                 }
 
@@ -6280,8 +6283,16 @@ public class BrokVnClickAreaWindow extends JFrame {
                     } else if (currentDragType == DragHandleType.CLICKER_BOX) {
                         int curX = toEngineX(e.getX());
                         int curY = toEngineY(e.getY());
-                        setBoundsCoordinates(dragStartX, dragStartY, curX, curY);
+                        if (Math.abs(curX - dragStartX) < 6 && Math.abs(curY - dragStartY) < 6) {
+                            setBoundsCoordinates(dragStartX - 150, dragStartY - 100, dragStartX + 150, dragStartY + 100);
+                        } else {
+                            setBoundsCoordinates(dragStartX, dragStartY, curX, curY);
+                        }
+                        hasActiveClicker = true;
                         currentDragType = DragHandleType.NONE;
+                        updateBoundsLabel();
+                        updateScriptPreview();
+                        updateOverallBrokVnFile();
                         repaint();
                     }
                 }
