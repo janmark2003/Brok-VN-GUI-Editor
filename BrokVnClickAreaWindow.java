@@ -12,8 +12,6 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.dnd.*;
 import java.awt.event.*;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -21,6 +19,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.prefs.Preferences;
@@ -28,16 +27,18 @@ import java.util.prefs.Preferences;
 /**
  * BrokVN GUI Editor
  * Visual Novel Clickable Area, Hotspot Studio, Sprite Placement, Multi-Waypoint Walk Paths,
- * Layer System, Full-Screen Preview, and Project State Manager for Brok VN Engine (1920×1080 Native).
+ * Layer System, Full-Screen Preview, Project State Manager, and GitHub API Auto-Updater
+ * for the Brok VN Engine (1920×1080 Native Canvas).
  */
 public class BrokVnClickAreaWindow extends JFrame {
 
     public static final String APP_NAME = "BrokVN GUI Editor";
     public static final String APP_VERSION = "v1.3.0";
-    public static final String GITHUB_REPO = "brokvn/BrokVnGuiEditor";
-    public static final String UPDATE_CHECK_URL = "https://api.github.com/repos/brokvn/BrokVnGuiEditor/releases/latest";
+    public static final String GITHUB_REPO = "janmark2003/Brok-VN-GUI-Editor";
+    public static final String UPDATE_CHECK_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 
     private static final String PREF_LAST_BROWSE_DIR = "last_browsed_directory";
+    private static final String PREF_GITHUB_TOKEN = "github_api_token";
     private static final Preferences prefs = Preferences.userNodeForPackage(BrokVnClickAreaWindow.class);
 
     public interface InsertCallback {
@@ -126,7 +127,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                 sb.append("\tSTAYACTIVE=ALWAYS\n");
             }
 
-            // Clean event transition stub (without junk placeholder text)
+            // Clean event transition stub
             sb.append("\n# Event Handler for ").append(id).append("\n");
             sb.append("EVENT=").append(targetEv).append("\n");
             sb.append("\t# Add scene actions / dialogue call here\n");
@@ -171,7 +172,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         // Spritesheet & Animation settings (Default Speed = 8 fps)
         public boolean isAnimation = false;
         public int nbFrames = 1;
-        public int animSpeed = 8; // Default calibrated to 8 FPS
+        public int animSpeed = 8; // Calibrated default 8 FPS
         public String animEnd = "REPEAT"; // "REPEAT", "BLOCK", "DESTROY"
         public boolean isPlaying = true;
         public long lastFrameTimeNano = 0;
@@ -298,14 +299,12 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         public int getCalculatedDepth() {
             if (autoDepth) {
-                // Auto depth based on Y position (ground coordinate)
                 int groundY = getY2();
                 return Math.max(1, Math.min(99, groundY / 20));
             }
             return depth;
         }
 
-        // Compute Engine Anchor coordinates (X, Y in IMAGENEW script)
         public int getAnchorX() {
             if (!useOrigin || origin == null)
                 return x;
@@ -350,7 +349,6 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         }
 
-        // Set Top-Left X, Y based on given Anchor coordinates
         public void setFromAnchor(int ax, int ay) {
             if (!useOrigin || origin == null) {
                 this.x = ax;
@@ -430,7 +428,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                 sb.append("\tANIMEND=").append(animEnd.trim().toUpperCase()).append("\n");
             }
 
-            // Append Multi-Waypoint IMAGEMOVE Walk Path script if enabled
             if (useWalkPath && waypoints.size() >= 2) {
                 sb.append("\n#----------------------------------------------------\n");
                 sb.append("# MULTI-WAYPOINT WALK PATHS: ").append(imageId).append("\n");
@@ -464,14 +461,12 @@ public class BrokVnClickAreaWindow extends JFrame {
         IMAGE
     }
 
-    // Drag handle types on Canvas
     private enum DragHandleType {
         NONE,
         OVERLAY_SPRITE,
         OVERLAY_LABEL,
         WAYPOINT_PIN,
-        CLICKER_BOX,
-        CLICKER_RESIZE
+        CLICKER_BOX
     }
 
     // =========================================================================
@@ -506,10 +501,10 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JCheckBox chkShowOverlays;
     private JButton btnClearOverlays;
 
-    // Animation playback ticker (cycles frames & waypoints at ~60fps)
+    // Animation playback ticker
     private javax.swing.Timer animTimer;
 
-    // Current Clicker drag coordinates (allows arbitrary coordinates)
+    // Current Clicker drag coordinates
     private int curX1 = 100;
     private int curY1 = 100;
     private int curX2 = 500;
@@ -551,10 +546,8 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JSlider sldAnimScrubber;
     private boolean updatingImgSpinners = false;
 
-    // Multi-Waypoint Walk Path Controls (Point A -> Point B -> Point C -> ... Infinite)
+    // Multi-Waypoint Walk Path Controls
     private JCheckBox chkUseWalkPath;
-    private DefaultTableModel waypointTableModel;
-    private JTable waypointTable;
     private JLabel lblWalkDistanceInfo;
     private JSpinner spSelectedWpX, spSelectedWpY, spSelectedWpSpeed;
     private JTextField txtSelectedWpEvent;
@@ -588,7 +581,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JCheckBox chkShowWaypoints;
     private JTabbedPane rightTabbedPane;
 
-    // Palette tokens for dark vs light mode
+    // Palette tokens
     private Color cBg;
     private Color cPanelBg;
     private Color cInputBg;
@@ -616,8 +609,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         this.insertCallback = callback;
 
         initColorTokens();
-
-        // Load application branding icon & logo
         loadWindowIcon();
         loadLogoImage();
 
@@ -640,8 +631,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         updateScriptPreview();
 
         initAnimationTimer();
-
-        // Check if there are default backgrounds in project to load
         findAndPromptDefaultBackground();
     }
 
@@ -668,12 +657,11 @@ public class BrokVnClickAreaWindow extends JFrame {
     }
 
     private void initAnimationTimer() {
-        // Animation ticker at ~60fps for smooth spritesheet playback and multi-waypoint walking
         animTimer = new javax.swing.Timer(16, e -> {
             long now = System.nanoTime();
             boolean needRepaint = false;
             for (OverlayObject obj : overlayObjects) {
-                // 1. Spritesheet Frame Cycling (calibrated default 8 fps)
+                // Spritesheet Frame Cycling (calibrated default 8 fps)
                 if (obj.isAnimation && obj.isPlaying && obj.nbFrames > 1 && obj.animSpeed > 0) {
                     long frameIntervalNano = 1_000_000_000L / obj.animSpeed;
                     if (now - obj.lastFrameTimeNano >= frameIntervalNano) {
@@ -685,7 +673,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                             } else if ("DESTROY".equalsIgnoreCase(obj.animEnd)) {
                                 next = 0;
                                 obj.isPlaying = false;
-                            } else { // REPEAT / LOOP
+                            } else {
                                 next = 0;
                             }
                         }
@@ -700,7 +688,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                     }
                 }
 
-                // 2. Multi-Waypoint Walk Path Movement (Point A -> Point B -> Point C ...)
+                // Multi-Waypoint Walk Path Movement
                 if (obj.useWalkPath && obj.isPlaying && obj.waypoints.size() >= 2 && currentDragType != DragHandleType.OVERLAY_SPRITE) {
                     int numSegments = obj.waypoints.size() - 1;
                     if (obj.currentWaypointSegment >= 0 && obj.currentWaypointSegment < numSegments) {
@@ -741,7 +729,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                                 }
                             }
 
-                            // Interpolate position along current segment
                             int segIdx = Math.max(0, Math.min(numSegments - 1, obj.currentWaypointSegment));
                             Waypoint curS = obj.waypoints.get(segIdx);
                             Waypoint curE = obj.waypoints.get(segIdx + 1);
@@ -761,8 +748,18 @@ public class BrokVnClickAreaWindow extends JFrame {
     }
 
     // =========================================================================
-    // BUILT-IN WINDOWS FILE EXPLORER DIALOG WITH PERSISTENT PATH RETENTION
+    // GITHUB API TOKEN & PREFERENCES
     // =========================================================================
+
+    public static String getGitHubApiToken() {
+        return prefs.get(PREF_GITHUB_TOKEN, "");
+    }
+
+    public static void setGitHubApiToken(String token) {
+        if (token != null) {
+            prefs.put(PREF_GITHUB_TOKEN, token.trim());
+        }
+    }
 
     public static File getLastBrowseDirectory() {
         String path = prefs.get(PREF_LAST_BROWSE_DIR, null);
@@ -859,7 +856,6 @@ public class BrokVnClickAreaWindow extends JFrame {
     private void applyUiManagerDefaults() {
         UIManager.put("Panel.background", cPanelBg);
         UIManager.put("Panel.foreground", cFg);
-
         UIManager.put("Button.background", cButtonBg);
         UIManager.put("Button.foreground", cButtonFg);
         UIManager.put("Button.border", BorderFactory.createCompoundBorder(
@@ -867,14 +863,12 @@ public class BrokVnClickAreaWindow extends JFrame {
         UIManager.put("Button.focus", cButtonBg);
         UIManager.put("Button.select", cBorder);
         UIManager.put("Button.highlight", cButtonBg.brighter());
-
         UIManager.put("ComboBox.background", cInputBg);
         UIManager.put("ComboBox.foreground", cFg);
         UIManager.put("ComboBox.selectionBackground", new Color(0, 122, 255));
         UIManager.put("ComboBox.selectionForeground", Color.WHITE);
         UIManager.put("ComboBox.border", new LineBorder(cBorder, 1));
         UIManager.put("ComboBox.buttonBackground", cInputBg);
-
         UIManager.put("TextField.background", cInputBg);
         UIManager.put("TextField.foreground", cFg);
         UIManager.put("TextField.caretForeground", cFg);
@@ -882,28 +876,22 @@ public class BrokVnClickAreaWindow extends JFrame {
                 new LineBorder(cBorder, 1), new EmptyBorder(4, 8, 4, 8)));
         UIManager.put("TextField.selectionBackground", new Color(0, 122, 255));
         UIManager.put("TextField.selectionForeground", Color.WHITE);
-
         UIManager.put("Spinner.background", cInputBg);
         UIManager.put("Spinner.foreground", cFg);
         UIManager.put("Spinner.border", new LineBorder(cBorder, 1));
-
         UIManager.put("CheckBox.background", cPanelBg);
         UIManager.put("CheckBox.foreground", cFg);
-
         UIManager.put("Label.foreground", cFg);
         UIManager.put("Label.background", cPanelBg);
-
         UIManager.put("ScrollPane.background", cInputBg);
         UIManager.put("Viewport.background", cInputBg);
         UIManager.put("ScrollBar.background", cBg);
         UIManager.put("ScrollBar.thumb", cBorder);
-
         UIManager.put("TextArea.background", cInputBg);
         UIManager.put("TextArea.foreground", cFg);
         UIManager.put("TextArea.caretForeground", cFg);
         UIManager.put("TextArea.selectionBackground", new Color(0, 122, 255));
         UIManager.put("TextArea.selectionForeground", Color.WHITE);
-
         UIManager.put("Table.background", cInputBg);
         UIManager.put("Table.foreground", cFg);
         UIManager.put("Table.selectionBackground", new Color(0, 122, 255));
@@ -911,10 +899,8 @@ public class BrokVnClickAreaWindow extends JFrame {
         UIManager.put("Table.gridColor", cBorder);
         UIManager.put("TableHeader.background", cButtonBg);
         UIManager.put("TableHeader.foreground", cFg);
-
         UIManager.put("TitledBorder.titleColor", cTitle);
         UIManager.put("TitledBorder.border", new LineBorder(cBorder, 1));
-
         UIManager.put("TabbedPane.background", cBg);
         UIManager.put("TabbedPane.foreground", cFg);
         UIManager.put("TabbedPane.selected", cButtonBg);
@@ -1018,7 +1004,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         rightActions.setOpaque(false);
 
-        // Edit target toggles
         btnTargetClicker = new JToggleButton("Edit Clicker", true);
         btnTargetImage = new JToggleButton("Edit Sprite", false);
         styleStandardButton(btnTargetClicker);
@@ -1074,7 +1059,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         JButton btnCheckUpdate = new JButton("Check Updates");
         styleStandardButton(btnCheckUpdate);
-        btnCheckUpdate.setToolTipText("Check for newer BrokVN GUI Editor updates");
+        btnCheckUpdate.setToolTipText("Check for newer BrokVN GUI Editor updates from GitHub");
         btnCheckUpdate.addActionListener(e -> showUpdateDialog(false));
 
         rightActions.add(btnTargetClicker);
@@ -1092,7 +1077,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         topBar.add(leftActions, BorderLayout.WEST);
         topBar.add(rightActions, BorderLayout.EAST);
 
-        // Center Split: Left = Canvas | Right (3rd Side) = Inspector & Overall BrokVN File
         JPanel canvasContainer = buildCanvasContainer();
         JPanel rightPanel = buildRightPanel();
 
@@ -1106,7 +1090,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         root.add(topBar, BorderLayout.NORTH);
         root.add(splitMain, BorderLayout.CENTER);
 
-        // Global Keybindings (F11 = Full Screen, Ctrl+S = Save Project, Ctrl+O = Open Project, Ctrl+N = New)
+        // Global Keybindings
         root.registerKeyboardAction(e -> openFullScreenPreview(), KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
         root.registerKeyboardAction(e -> saveProject(false), KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         root.registerKeyboardAction(e -> openProject(), KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -1191,12 +1175,16 @@ public class BrokVnClickAreaWindow extends JFrame {
         JMenuItem miCheckUpdate = new JMenuItem("Check for Updates...");
         miCheckUpdate.addActionListener(e -> showUpdateDialog(true));
 
+        JMenuItem miConfigToken = new JMenuItem("Configure GitHub API Token...");
+        miConfigToken.addActionListener(e -> showConfigureTokenDialog());
+
         JMenuItem miAbout = new JMenuItem("About " + APP_NAME);
         miAbout.addActionListener(e -> showAboutDialog());
 
         mHelp.add(miDoc);
         mHelp.addSeparator();
         mHelp.add(miCheckUpdate);
+        mHelp.add(miConfigToken);
         mHelp.add(miAbout);
 
         mb.add(mFile);
@@ -1216,7 +1204,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         canvas = new ClickAreaCanvas();
         canvasContainer.add(canvas, BorderLayout.CENTER);
 
-        // Bottom Canvas Status Bar - 2 stacked rows
         JPanel canvasStatusBar = new JPanel(new GridLayout(2, 1, 0, 3));
         canvasStatusBar.setBackground(cPanelBg);
         canvasStatusBar.setBorder(BorderFactory.createCompoundBorder(
@@ -1377,7 +1364,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         contentPanel.setBackground(cPanelBg);
         contentPanel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
-        // Coordinate Box (supports infinite / negative coordinates for offscreen clickers)
+        // Coordinate Box
         JPanel coordBox = new JPanel(new GridLayout(2, 6, 4, 3));
         coordBox.setBackground(cPanelBg);
         styleTitledBorder(coordBox, "Clicker Coordinates (CLICKERNEW X1, Y1, X2, Y2)");
@@ -1603,7 +1590,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         contentPanel.setBackground(cPanelBg);
         contentPanel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
-        // --- Card 1: Character / Sprite Placement (IMAGENEW) ---
+        // Card 1: Character / Sprite Placement (IMAGENEW)
         JPanel imgPropBox = new JPanel(new GridBagLayout());
         imgPropBox.setBackground(cPanelBg);
         styleTitledBorder(imgPropBox, "Character / Sprite Placement (IMAGENEW)");
@@ -1639,7 +1626,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         lblImgDimensions.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lblImgDimensions.setForeground(new Color(0, 175, 255));
 
-        // Anchor Origin Checkbox & Dropdown
         chkUseOrigin = new JCheckBox("Anchor Origin (ORIGIN=)", true);
         styleCheckBox(chkUseOrigin);
         chkUseOrigin.addActionListener(e -> {
@@ -1655,7 +1641,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         styleComboBox(cmbImageOrigin);
         cmbImageOrigin.addItemListener(e -> syncActiveObjectFromImageUi());
 
-        // Auto Depth vs Manual Depth
         chkAutoDepth = new JCheckBox("Auto Depth (Y-Sort)", true);
         styleCheckBox(chkAutoDepth);
         chkAutoDepth.addActionListener(e -> {
@@ -1671,7 +1656,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         spImageDepth.setEnabled(false);
         spImageDepth.addChangeListener(imgSpinnerListener);
 
-        // Character Scale / Size
         spImageScale = new JSpinner(new SpinnerNumberModel(100, 1, 500, 1));
         styleSpinner(spImageScale);
 
@@ -1692,24 +1676,20 @@ public class BrokVnClickAreaWindow extends JFrame {
             syncActiveObjectFromImageUi();
         });
 
-        // Flip Character
         chkFlipH = new JCheckBox("Flip Character (Horizontal Mirror)", false);
         styleCheckBox(chkFlipH);
         chkFlipH.addActionListener(e -> syncActiveObjectFromImageUi());
 
-        // Row 0: Image ID
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.28;
         imgPropBox.add(createStyledLabel("Image ID (IMAGENEW):"), gbc);
         gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 0.72;
         imgPropBox.add(txtImageId, gbc);
 
-        // Row 1: File parameter (FILE=)
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.28;
         imgPropBox.add(createStyledLabel("Sprite File (FILE=):"), gbc);
         gbc.gridx = 1; gbc.gridy = 1; gbc.weightx = 0.72;
         imgPropBox.add(txtImageFile, gbc);
 
-        // Row 2: Scale / Size
         gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.28;
         imgPropBox.add(createStyledLabel("Scale / Size (SCALE=):"), gbc);
         JPanel scalePanel = new JPanel(new BorderLayout(4, 0));
@@ -1720,18 +1700,15 @@ public class BrokVnClickAreaWindow extends JFrame {
         gbc.gridx = 1; gbc.gridy = 2; gbc.weightx = 0.72;
         imgPropBox.add(scalePanel, gbc);
 
-        // Row 3: Flip Character
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
         imgPropBox.add(chkFlipH, gbc);
         gbc.gridwidth = 1;
 
-        // Row 4: Anchor Origin
         gbc.gridx = 0; gbc.gridy = 4; gbc.weightx = 0.28;
         imgPropBox.add(chkUseOrigin, gbc);
         gbc.gridx = 1; gbc.gridy = 4; gbc.weightx = 0.72;
         imgPropBox.add(cmbImageOrigin, gbc);
 
-        // Row 5: Position (X, Y)
         gbc.gridx = 0; gbc.gridy = 5; gbc.weightx = 0.28;
         imgPropBox.add(createStyledLabel("Position (X, Y):"), gbc);
         JPanel posPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -1745,7 +1722,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         gbc.gridx = 1; gbc.gridy = 5; gbc.weightx = 0.72;
         imgPropBox.add(posPanel, gbc);
 
-        // Row 6: Depth & Dimensions
         gbc.gridx = 0; gbc.gridy = 6; gbc.weightx = 0.28;
         imgPropBox.add(createStyledLabel("Layer Depth:"), gbc);
         JPanel depthPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -1759,7 +1735,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         gbc.gridx = 1; gbc.gridy = 6; gbc.weightx = 0.72;
         imgPropBox.add(depthPanel, gbc);
 
-        // --- Card 2: Spritesheet & Animation Controls (Default Speed = 8 FPS) ---
+        // Card 2: Spritesheet & Animation Controls
         JPanel animBox = new JPanel(new GridBagLayout());
         animBox.setBackground(cPanelBg);
         styleTitledBorder(animBox, "Spritesheet Animation Controls (Default: 8 FPS)");
@@ -1781,7 +1757,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         });
 
         spNbFrames = new JSpinner(new SpinnerNumberModel(6, 1, 128, 1));
-        spAnimSpeed = new JSpinner(new SpinnerNumberModel(8, 1, 120, 1)); // Default 8 FPS
+        spAnimSpeed = new JSpinner(new SpinnerNumberModel(8, 1, 120, 1));
         styleSpinner(spNbFrames);
         styleSpinner(spAnimSpeed);
 
@@ -1808,7 +1784,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         animBox.add(chkIsAnimation, agbc);
         agbc.gridwidth = 1;
 
-        // Frames & Speed
         agbc.gridx = 0; agbc.gridy = 1; agbc.weightx = 0.35;
         animBox.add(createStyledLabel("Frames / FPS:"), agbc);
         JPanel frameFpsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -1822,13 +1797,11 @@ public class BrokVnClickAreaWindow extends JFrame {
         agbc.gridx = 1; agbc.gridy = 1; agbc.weightx = 0.65;
         animBox.add(frameFpsPanel, agbc);
 
-        // AnimEnd
         agbc.gridx = 0; agbc.gridy = 2; agbc.weightx = 0.35;
         animBox.add(createStyledLabel("End Action (ANIMEND):"), agbc);
         agbc.gridx = 1; agbc.gridy = 2; agbc.weightx = 0.65;
         animBox.add(cmbAnimEnd, agbc);
 
-        // Playback Bar
         agbc.gridx = 0; agbc.gridy = 3; agbc.gridwidth = 2;
         JPanel playBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         playBar.setOpaque(false);
@@ -1879,7 +1852,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         playBar.add(lblAnimFrameStatus);
         animBox.add(playBar, agbc);
 
-        // Scrubber
         agbc.gridx = 0; agbc.gridy = 4; agbc.gridwidth = 2;
         sldAnimScrubber = new JSlider(1, 6, 1);
         sldAnimScrubber.setBackground(cPanelBg);
@@ -1896,7 +1868,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         });
         animBox.add(sldAnimScrubber, agbc);
 
-        // --- Card 3: Multi-Waypoint Walk Path Movement (Point A -> Point B -> Point C ... Infinite) ---
+        // Card 3: Multi-Waypoint Walk Path Movement
         JPanel walkBox = new JPanel(new GridBagLayout());
         walkBox.setBackground(cPanelBg);
         styleTitledBorder(walkBox, "Multi-Waypoint Walk Path (Draggable Point A-B-C Onwards)");
@@ -1918,7 +1890,6 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         });
 
-        // Waypoint Selector & Editor
         cmbWaypointSelector = new JComboBox<>();
         styleComboBox(cmbWaypointSelector);
         cmbWaypointSelector.addItemListener(e -> syncWaypointUiFromSelection());
@@ -1952,7 +1923,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         walkBox.add(chkUseWalkPath, wgbc);
         wgbc.gridwidth = 1;
 
-        // Waypoint Selector Row + Add / Remove Buttons
         wgbc.gridx = 0; wgbc.gridy = 1; wgbc.weightx = 0.35;
         walkBox.add(createStyledLabel("Active Waypoint:"), wgbc);
         JPanel wpManagePanel = new JPanel(new BorderLayout(4, 0));
@@ -1977,7 +1947,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         wgbc.gridx = 1; wgbc.gridy = 1; wgbc.weightx = 0.65;
         walkBox.add(wpManagePanel, wgbc);
 
-        // Waypoint Coordinates
         wgbc.gridx = 0; wgbc.gridy = 2; wgbc.weightx = 0.35;
         walkBox.add(createStyledLabel("Waypoint Position:"), wgbc);
         JPanel wpPosPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -1991,7 +1960,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         wgbc.gridx = 1; wgbc.gridy = 2; wgbc.weightx = 0.65;
         walkBox.add(wpPosPanel, wgbc);
 
-        // Speed & Arrival Event
         wgbc.gridx = 0; wgbc.gridy = 3; wgbc.weightx = 0.35;
         walkBox.add(createStyledLabel("SPEED / ENDEVENT:"), wgbc);
         JPanel pnlSpdEv = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -2005,7 +1973,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         wgbc.gridx = 1; wgbc.gridy = 3; wgbc.weightx = 0.65;
         walkBox.add(pnlSpdEv, wgbc);
 
-        // Distance info & quick presets
         wgbc.gridx = 0; wgbc.gridy = 4; wgbc.gridwidth = 2;
         walkBox.add(lblWalkDistanceInfo, wgbc);
 
@@ -2031,7 +1998,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         walkBox.add(walkPresetBar, wgbc);
         wgbc.gridwidth = 1;
 
-        // --- Card 4: Snap & Alignment Actions ---
+        // Card 4: Snap & Alignment Actions
         JPanel alignBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         alignBar.setBackground(cPanelBg);
 
@@ -2105,7 +2072,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         int idx = cmbWaypointSelector.getSelectedIndex();
         if (idx >= 0 && idx < activeOverlayObject.waypoints.size()) {
             activeOverlayObject.waypoints.remove(idx);
-            // Relabel remaining waypoints
             for (int i = 0; i < activeOverlayObject.waypoints.size(); i++) {
                 activeOverlayObject.waypoints.get(i).label = "Point " + ((char) ('A' + i));
             }
@@ -2223,7 +2189,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTableModel = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
-                return c == 4; // Checkbox column
+                return c == 4;
             }
             @Override
             public Class<?> getColumnClass(int col) {
@@ -2295,7 +2261,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (layerTableModel == null) return;
         layerTableModel.setRowCount(0);
 
-        // Add Sprites
         for (OverlayObject obj : overlayObjects) {
             layerTableModel.addRow(new Object[] {
                     "Sprite (IMAGENEW)",
@@ -2306,7 +2271,6 @@ public class BrokVnClickAreaWindow extends JFrame {
             });
         }
 
-        // Add Clickers
         for (ClickerDef def : savedClickers) {
             layerTableModel.addRow(new Object[] {
                     "Clicker",
@@ -2501,7 +2465,6 @@ public class BrokVnClickAreaWindow extends JFrame {
             sb.append("\tFADEIN=MEDIUM\n\n");
         }
 
-        // Placed IMAGENEW Sprites, Animations & Walk Paths
         if (!overlayObjects.isEmpty()) {
             sb.append("\t# --- Placed Sprites & Character Animations ---\n");
             for (OverlayObject obj : overlayObjects) {
@@ -2509,7 +2472,6 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         }
 
-        // Scene Clickers (Cleaned without junk dialogue)
         if (!savedClickers.isEmpty()) {
             sb.append("\t# --- Scene Interactive Clickers ---\n");
             for (ClickerDef def : savedClickers) {
@@ -2656,12 +2618,10 @@ public class BrokVnClickAreaWindow extends JFrame {
             currentProjectFile = f;
             setTitle(APP_NAME + " - [" + currentProjectFile.getName() + "]");
 
-            // Reset current state
             overlayObjects.clear();
             savedClickers.clear();
             if (clickerTableModel != null) clickerTableModel.setRowCount(0);
 
-            // Simple robust JSON key-value parser for .brokproj
             int bgIdx = content.indexOf("\"background\": \"");
             if (bgIdx > 0) {
                 int endBg = content.indexOf("\"", bgIdx + 15);
@@ -2674,7 +2634,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
             }
 
-            // Parse Sprites block
             int spArrStart = content.indexOf("\"sprites\": [");
             int spArrEnd = content.indexOf("\"clickers\": [");
             if (spArrStart >= 0 && spArrEnd > spArrStart) {
@@ -2688,7 +2647,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                         BufferedImage img = ImageIO.read(sFile);
                         if (img != null) {
                             OverlayObject obj = new OverlayObject(sFile, img, 0, 0);
-                            obj.imageId = extractJsonString(item, "").isEmpty() ? obj.imageId : item.substring(item.indexOf("\"") + 1, item.indexOf("\"", item.indexOf("\"") + 1));
                             obj.x = extractJsonInt(item, "\"x\": ", 0);
                             obj.y = extractJsonInt(item, "\"y\": ", 0);
                             obj.scale = extractJsonInt(item, "\"scale\": ", 100);
@@ -2713,7 +2671,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
             }
 
-            // Parse Clickers block
             if (spArrEnd >= 0) {
                 String clkBlock = content.substring(spArrEnd);
                 String[] clkItems = clkBlock.split("\\{\\s*\"id\":");
@@ -2809,7 +2766,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel fsPanel = new JPanel(new BorderLayout());
         fsPanel.setBackground(Color.BLACK);
 
-        // Interactive Full-screen canvas clone
         JPanel previewCanvas = new JPanel() {
             private String hoveredClickerText = "";
             private int mouseEngX = -1;
@@ -2871,7 +2827,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                     g2.fillRect(offX, offY, drawW, drawH);
                 }
 
-                // Render Sprites
                 for (OverlayObject obj : overlayObjects) {
                     BufferedImage frame = obj.getCurrentFrame();
                     if (frame != null) {
@@ -2887,7 +2842,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                     }
                 }
 
-                // Render Hover Indicator / Text Box at bottom
                 if (!hoveredClickerText.isEmpty()) {
                     g2.setFont(new Font("Segoe UI", Font.BOLD, 18));
                     FontMetrics fm = g2.getFontMetrics();
@@ -2904,7 +2858,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                     g2.drawString(hoveredClickerText, tx + 16, ty + 28);
                 }
 
-                // Top instructions
                 g2.setFont(new Font("Segoe UI", Font.PLAIN, 12));
                 g2.setColor(new Color(255, 255, 255, 150));
                 g2.drawString("FULL SCREEN ENGINE PREVIEW (1920×1080) | Press ESC or F11 to Exit", offX + 16, offY + 24);
@@ -2922,7 +2875,6 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         });
 
-        // ESC / F11 to exit
         fsPanel.registerKeyboardAction(e -> fsDialog.dispose(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
         fsPanel.registerKeyboardAction(e -> fsDialog.dispose(), KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
@@ -3278,7 +3230,6 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
     }
 
-    // Prompt user on drag & drop or import
     public void handleDroppedFiles(List<File> files, Point dropPoint) {
         if (files == null || files.isEmpty()) return;
         for (File f : files) {
@@ -3817,13 +3768,116 @@ public class BrokVnClickAreaWindow extends JFrame {
     }
 
     // =========================================================================
-    // UPDATE CHECKER & DOWNLOAD DIALOG
+    // GITHUB API UPDATER, CONFIGURE TOKEN & IN-APP DIRECT DOWNLOADER
     // =========================================================================
+
+    public void showConfigureTokenDialog() {
+        JDialog dlg = new JDialog(this, "GitHub API Token Configuration", true);
+        dlg.setSize(520, 280);
+        dlg.setLocationRelativeTo(this);
+        dlg.getContentPane().setBackground(cPanelBg);
+
+        JPanel pnl = new JPanel(new GridBagLayout());
+        pnl.setBackground(cPanelBg);
+        pnl.setBorder(new EmptyBorder(14, 18, 14, 18));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        JLabel lblTitle = new JLabel("GitHub API Key / Personal Access Token (PAT)");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblTitle.setForeground(cTitle);
+
+        JLabel lblDesc = new JLabel("<html>Connects to <b>" + GITHUB_REPO + "</b> for auto-downloading updates.<br>"
+                + "Increases GitHub rate limit from 60 to 5,000 requests/hr & allows private repo access.</html>");
+        lblDesc.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        lblDesc.setForeground(cFgSubdued);
+
+        JPasswordField txtToken = new JPasswordField(getGitHubApiToken());
+        styleTextField(txtToken);
+
+        JLabel lblStatus = new JLabel(" ");
+        lblStatus.setFont(new Font("Segoe UI", Font.BOLD, 11));
+
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
+        pnl.add(lblTitle, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 2;
+        pnl.add(lblDesc, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        pnl.add(txtToken, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+        pnl.add(lblStatus, gbc);
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        btnRow.setOpaque(false);
+
+        JButton btnTest = new JButton("Test Connection");
+        styleStandardButton(btnTest);
+        btnTest.addActionListener(e -> {
+            String tok = new String(txtToken.getPassword()).trim();
+            lblStatus.setText("Testing GitHub connection...");
+            lblStatus.setForeground(new Color(255, 195, 60));
+            new Thread(() -> {
+                try {
+                    URL u = new URI("https://api.github.com/repos/" + GITHUB_REPO).toURL();
+                    HttpURLConnection c = (HttpURLConnection) u.openConnection();
+                    c.setRequestMethod("GET");
+                    c.setRequestProperty("User-Agent", "BrokVnGuiEditor/" + APP_VERSION);
+                    if (!tok.isEmpty()) {
+                        c.setRequestProperty("Authorization", "Bearer " + tok);
+                    }
+                    c.setConnectTimeout(4000);
+                    int code = c.getResponseCode();
+                    SwingUtilities.invokeLater(() -> {
+                        if (code == 200) {
+                            lblStatus.setText("Connected successfully to " + GITHUB_REPO + "!");
+                            lblStatus.setForeground(new Color(85, 215, 105));
+                        } else {
+                            lblStatus.setText("HTTP " + code + ": Access Denied or Repo not found.");
+                            lblStatus.setForeground(new Color(255, 80, 80));
+                        }
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        lblStatus.setText("Error: " + ex.getMessage());
+                        lblStatus.setForeground(new Color(255, 80, 80));
+                    });
+                }
+            }).start();
+        });
+
+        JButton btnSave = new JButton("Save Token");
+        stylePrimaryButton(btnSave, new Color(0, 122, 255));
+        btnSave.addActionListener(e -> {
+            String tok = new String(txtToken.getPassword()).trim();
+            setGitHubApiToken(tok);
+            JOptionPane.showMessageDialog(dlg, "GitHub API Token saved to preferences!", "Token Saved", JOptionPane.INFORMATION_MESSAGE);
+            dlg.dispose();
+        });
+
+        JButton btnClose = new JButton("Cancel");
+        styleStandardButton(btnClose);
+        btnClose.addActionListener(e -> dlg.dispose());
+
+        btnRow.add(btnTest);
+        btnRow.add(btnSave);
+        btnRow.add(btnClose);
+
+        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
+        pnl.add(btnRow, gbc);
+
+        dlg.setContentPane(pnl);
+        dlg.setVisible(true);
+    }
 
     public void showUpdateDialog(boolean notifyIfUpToDate) {
         JDialog dlg = new JDialog(this, "Check for Updates - " + APP_NAME, true);
         dlg.setLayout(new BorderLayout());
-        dlg.setSize(480, 260);
+        dlg.setSize(540, 320);
         dlg.setLocationRelativeTo(this);
         dlg.getContentPane().setBackground(cPanelBg);
 
@@ -3835,33 +3889,43 @@ public class BrokVnClickAreaWindow extends JFrame {
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 15));
         lblTitle.setForeground(cTitle);
 
-        JLabel lblVer = new JLabel("Current Version: " + APP_VERSION);
+        JLabel lblVer = new JLabel("Current Version: " + APP_VERSION + "  |  Repo: " + GITHUB_REPO);
         lblVer.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblVer.setForeground(cFg);
 
-        JLabel lblStatus = new JLabel("Checking for latest releases online...");
+        JLabel lblStatus = new JLabel("Connecting to GitHub repository (" + GITHUB_REPO + ")...");
         lblStatus.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         lblStatus.setForeground(new Color(255, 195, 60));
 
-        JPanel center = new JPanel(new GridLayout(3, 1, 4, 6));
+        JProgressBar pBar = new JProgressBar(0, 100);
+        pBar.setStringPainted(true);
+        pBar.setVisible(false);
+
+        JPanel center = new JPanel(new GridLayout(4, 1, 4, 6));
         center.setOpaque(false);
         center.add(lblTitle);
         center.add(lblVer);
         center.add(lblStatus);
+        center.add(pBar);
         pnl.add(center, BorderLayout.CENTER);
 
-        JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         btnBar.setOpaque(false);
 
-        JButton btnDownload = new JButton("Download New Update");
-        stylePrimaryButton(btnDownload, new Color(0, 122, 255));
-        btnDownload.setEnabled(false);
+        JButton btnConfigToken = new JButton("Configure API Key");
+        styleStandardButton(btnConfigToken);
+        btnConfigToken.addActionListener(e -> showConfigureTokenDialog());
+
+        JButton btnDownloadDirect = new JButton("Download Update Inside App");
+        stylePrimaryButton(btnDownloadDirect, new Color(0, 122, 255));
+        btnDownloadDirect.setEnabled(false);
 
         JButton btnClose = new JButton("Close");
         styleStandardButton(btnClose);
         btnClose.addActionListener(e -> dlg.dispose());
 
-        btnBar.add(btnDownload);
+        btnBar.add(btnConfigToken);
+        btnBar.add(btnDownloadDirect);
         btnBar.add(btnClose);
         pnl.add(btnBar, BorderLayout.SOUTH);
 
@@ -3873,6 +3937,11 @@ public class BrokVnClickAreaWindow extends JFrame {
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("User-Agent", "BrokVnGuiEditor/" + APP_VERSION);
+                String tok = getGitHubApiToken();
+                if (!tok.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + tok);
+                }
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
                 conn.setConnectTimeout(4000);
                 conn.setReadTimeout(4000);
 
@@ -3885,54 +3954,122 @@ public class BrokVnClickAreaWindow extends JFrame {
                     br.close();
 
                     String json = resp.toString();
-                    String tag = "";
-                    int tagIdx = json.indexOf("\"tag_name\":");
-                    if (tagIdx > 0) {
-                        int q1 = json.indexOf('"', tagIdx + 11);
-                        int q2 = json.indexOf('"', q1 + 1);
-                        if (q1 > 0 && q2 > q1) {
-                            tag = json.substring(q1 + 1, q2);
-                        }
+                    String tag = extractJsonString(json, "\"tag_name\": \"");
+                    String downloadUrl = extractJsonString(json, "\"browser_download_url\": \"");
+                    if (downloadUrl.isEmpty()) {
+                        downloadUrl = extractJsonString(json, "\"zipball_url\": \"");
                     }
 
                     final String latestTag = tag;
+                    final String directAssetUrl = downloadUrl;
+
                     SwingUtilities.invokeLater(() -> {
                         if (!latestTag.isEmpty() && !latestTag.equalsIgnoreCase(APP_VERSION)) {
                             lblStatus.setText("New version available: " + latestTag + "!");
                             lblStatus.setForeground(new Color(85, 215, 105));
-                            btnDownload.setEnabled(true);
-                            btnDownload.addActionListener(ev -> {
-                                try {
-                                    Desktop.getDesktop().browse(new URI("https://github.com/" + GITHUB_REPO + "/releases/latest"));
-                                } catch (Exception ex) {
-                                    JOptionPane.showMessageDialog(dlg, "Error opening release page: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                                }
+                            btnDownloadDirect.setEnabled(true);
+                            btnDownloadDirect.setText("Download " + latestTag + " Now");
+                            btnDownloadDirect.addActionListener(ev -> {
+                                btnDownloadDirect.setEnabled(false);
+                                pBar.setVisible(true);
+                                startInAppDownload(directAssetUrl, latestTag, pBar, lblStatus, dlg);
                             });
                         } else {
                             lblStatus.setText("You have the latest version installed (" + APP_VERSION + ").");
                             lblStatus.setForeground(new Color(85, 215, 105));
                         }
                     });
+                } else if (code == 404) {
+                    SwingUtilities.invokeLater(() -> {
+                        lblStatus.setText("Repo connected (" + GITHUB_REPO + "). No releases published yet.");
+                        lblStatus.setForeground(new Color(85, 215, 105));
+                    });
                 } else {
-                    throw new IOException("HTTP code " + code);
+                    throw new IOException("GitHub API returned HTTP " + code);
                 }
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     lblStatus.setText("Up to date (" + APP_VERSION + "). Local release verified.");
                     lblStatus.setForeground(new Color(85, 215, 105));
-                    btnDownload.setEnabled(true);
-                    btnDownload.setText("Visit Releases Page");
-                    btnDownload.addActionListener(ev -> {
-                        try {
-                            Desktop.getDesktop().browse(new URI("https://github.com/" + GITHUB_REPO + "/releases"));
-                        } catch (Exception ignored) {
-                        }
-                    });
                 });
             }
         }).start();
 
         dlg.setVisible(true);
+    }
+
+    private void startInAppDownload(String assetUrl, String tag, JProgressBar pBar, JLabel lblStatus, JDialog dlg) {
+        new Thread(() -> {
+            try {
+                if (assetUrl == null || assetUrl.isEmpty()) {
+                    throw new IOException("No download URL found for this release.");
+                }
+                URL url = new URI(assetUrl).toURL();
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestProperty("User-Agent", "BrokVnGuiEditor/" + APP_VERSION);
+                String tok = getGitHubApiToken();
+                if (!tok.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + tok);
+                }
+                conn.connect();
+
+                int totalBytes = conn.getContentLength();
+                File updateDir = new File("updates");
+                if (!updateDir.exists()) updateDir.mkdirs();
+
+                String outName = "BrokVnGuiEditor_" + tag + ".zip";
+                if (assetUrl.toLowerCase().endsWith(".exe")) {
+                    outName = "BrokVnGuiEditor_" + tag + ".exe";
+                }
+                File targetFile = new File(updateDir, outName);
+
+                InputStream in = conn.getInputStream();
+                FileOutputStream out = new FileOutputStream(targetFile);
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                int downloaded = 0;
+
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                    downloaded += bytesRead;
+                    if (totalBytes > 0) {
+                        final int curDownloaded = downloaded;
+                        final int finalTotal = totalBytes;
+                        final int pct = (int) (((double) curDownloaded / finalTotal) * 100);
+                        SwingUtilities.invokeLater(() -> {
+                            pBar.setValue(pct);
+                            lblStatus.setText(String.format("Downloading: %d%% (%d / %d KB)", pct, curDownloaded / 1024, finalTotal / 1024));
+                        });
+                    }
+                }
+                in.close();
+                out.close();
+
+                SwingUtilities.invokeLater(() -> {
+                    pBar.setValue(100);
+                    lblStatus.setText("Download complete: " + targetFile.getName());
+                    int choice = JOptionPane.showOptionDialog(
+                            dlg,
+                            "Update downloaded successfully to:\n" + targetFile.getAbsolutePath()
+                                    + "\n\nWould you like to open the updates folder now?",
+                            "Update Downloaded",
+                            JOptionPane.YES_NO_OPTION,
+                            JOptionPane.INFORMATION_MESSAGE,
+                            null,
+                            new String[] { "Open Updates Folder", "Close" },
+                            "Open Updates Folder");
+                    if (choice == 0) {
+                        openInExplorer(targetFile);
+                    }
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    lblStatus.setText("Download failed: " + ex.getMessage());
+                    lblStatus.setForeground(new Color(255, 80, 80));
+                    JOptionPane.showMessageDialog(dlg, "Download failed: " + ex.getMessage(), "Update Error", JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        }).start();
     }
 
     private void openDocumentationHtml() {
@@ -3956,8 +4093,9 @@ public class BrokVnClickAreaWindow extends JFrame {
                 APP_NAME + " " + APP_VERSION + "\n\n"
                         + "Dedicated Visual Novel Clickable Area Studio, Character Sprite Placement,\n"
                         + "Multi-Waypoint Walk Paths (A->B->C...), Layer System & Full Screen Preview.\n\n"
+                        + "Connected Repository: " + GITHUB_REPO + "\n"
                         + "Engine Resolution: 1920×1080 Native\n"
-                        + "Features: Draggable Waypoint Pins, Calibrated 8 FPS Defaults, Project Save/Load (.brokproj),\n"
+                        + "Features: Draggable Waypoints, In-App GitHub Auto-Updater, Project Save/Load (.brokproj),\n"
                         + "Draggable Character Badges, Free Frame Overlap, and Overall BrokVN Scene Script Generator.",
                 "About " + APP_NAME, JOptionPane.INFORMATION_MESSAGE);
     }
@@ -4140,7 +4278,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                         activeOverlayObject.x = newX;
                         activeOverlayObject.y = newY;
 
-                        // Shift Waypoint A with sprite
                         if (activeOverlayObject.useWalkPath && !activeOverlayObject.waypoints.isEmpty()) {
                             activeOverlayObject.waypoints.get(0).x = activeOverlayObject.getAnchorX();
                             activeOverlayObject.waypoints.get(0).y = activeOverlayObject.getAnchorY();
@@ -4198,7 +4335,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                     int ex = toEngineX(mouseX);
                     int ey = toEngineY(mouseY);
 
-                    // Check over waypoint pin
                     if (activeOverlayObject != null && activeOverlayObject.useWalkPath) {
                         for (Waypoint wp : activeOverlayObject.waypoints) {
                             int pinSx = toScreenX(wp.x);
@@ -4211,7 +4347,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                         }
                     }
 
-                    // Check over sprite
                     boolean overObject = false;
                     if (chkShowOverlays == null || chkShowOverlays.isSelected()) {
                         for (OverlayObject obj : overlayObjects) {
@@ -4305,7 +4440,6 @@ public class BrokVnClickAreaWindow extends JFrame {
 
             // Render Character / Object Overlays with Frame Overlap, Z-Depth sorting & Multi-Waypoints
             if (chkShowOverlays == null || chkShowOverlays.isSelected()) {
-                // Sort by calculated depth for accurate layering
                 List<OverlayObject> sortedOverlays = new ArrayList<>(overlayObjects);
                 sortedOverlays.sort((o1, o2) -> Integer.compare(o1.getCalculatedDepth(), o2.getCalculatedDepth()));
 
@@ -4320,7 +4454,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             int bx = toScreenX(pB.x);
                             int by = toScreenY(pB.y);
 
-                            // Segment line
                             float[] pathDash = { 6.0f, 4.0f };
                             g2.setColor(new Color(255, 170, 0, 220));
                             g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, pathDash, 0.0f));
@@ -4340,7 +4473,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.setStroke(new BasicStroke(1.5f));
                             g2.drawOval(px - 7, py - 7, 14, 14);
 
-                            // Pin Tag
                             g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
                             String pinTag = wp.label;
                             FontMetrics pfm = g2.getFontMetrics();
@@ -4353,7 +4485,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                         }
                     }
 
-                    // Render Sprite Image Frame (allowing free offscreen overlap)
+                    // Render Sprite Image Frame
                     BufferedImage frameImg = obj.getCurrentFrame();
                     if (frameImg == null) frameImg = obj.fullImage;
                     if (frameImg != null) {
@@ -4369,13 +4501,11 @@ public class BrokVnClickAreaWindow extends JFrame {
                         }
 
                         if (obj == activeOverlayObject) {
-                            // Active selection dashed outline
                             float[] dash = { 5.0f, 4.0f };
                             g2.setColor(new Color(0, 230, 255));
                             g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, dash, 0.0f));
                             g2.drawRect(sx, sy, sw, sh);
 
-                            // Anchor Origin crosshair marker
                             int ax = toScreenX(obj.getAnchorX());
                             int ay = toScreenY(obj.getAnchorY());
                             g2.setColor(new Color(255, 60, 60));
@@ -4384,7 +4514,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.drawLine(ax, ay - 7, ax, ay + 7);
                             g2.drawOval(ax - 4, ay - 4, 8, 8);
 
-                            // Draggable Character Blue Label Badge
                             String tag = String.format(" %s [X: %d, Y: %d | Scale: %d%%] ",
                                     obj.imageId, obj.getAnchorX(), obj.getAnchorY(), obj.scale);
                             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
@@ -4395,7 +4524,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             int tx = sx + obj.labelOffsetX;
                             int ty = sy + obj.labelOffsetY;
 
-                            // Tether line if label is dragged away
                             if (obj.customLabelPos && (Math.abs(obj.labelOffsetX) > 20 || Math.abs(obj.labelOffsetY + 24) > 20)) {
                                 g2.setColor(new Color(0, 230, 255, 160));
                                 g2.setStroke(new BasicStroke(1.2f));
