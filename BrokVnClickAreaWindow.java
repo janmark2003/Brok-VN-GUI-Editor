@@ -652,7 +652,8 @@ public class BrokVnClickAreaWindow extends JFrame {
         OVERLAY_LABEL,
         WAYPOINT_PIN,
         CLICKER_BOX,
-        TEXT_OBJECT
+        TEXT_OBJECT,
+        CANVAS_PAN
     }
 
     // =========================================================================
@@ -1394,6 +1395,14 @@ public class BrokVnClickAreaWindow extends JFrame {
         root.registerKeyboardAction(e -> openProject(), KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         root.registerKeyboardAction(e -> newProject(), KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
+        // Zoom & Pan Keybindings
+        root.registerKeyboardAction(e -> { if (canvas != null) canvas.zoomIn(); }, KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        root.registerKeyboardAction(e -> { if (canvas != null) canvas.zoomIn(); }, KeyStroke.getKeyStroke(KeyEvent.VK_ADD, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        root.registerKeyboardAction(e -> { if (canvas != null) canvas.zoomOut(); }, KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        root.registerKeyboardAction(e -> { if (canvas != null) canvas.zoomOut(); }, KeyStroke.getKeyStroke(KeyEvent.VK_SUBTRACT, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        root.registerKeyboardAction(e -> { if (canvas != null) canvas.resetZoomAndPan(); }, KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        root.registerKeyboardAction(e -> { if (canvas != null) canvas.resetZoomAndPan(); }, KeyStroke.getKeyStroke(KeyEvent.VK_NUMPAD0, InputEvent.CTRL_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+
         setContentPane(root);
     }
 
@@ -1448,8 +1457,22 @@ public class BrokVnClickAreaWindow extends JFrame {
         JMenu mView = new JMenu("View");
         mView.setForeground(cFg);
 
+        JMenuItem miZoomIn = new JMenuItem("Zoom In (Ctrl++)");
+        miZoomIn.addActionListener(e -> { if (canvas != null) canvas.zoomIn(); });
+
+        JMenuItem miZoomOut = new JMenuItem("Zoom Out (Ctrl+-)");
+        miZoomOut.addActionListener(e -> { if (canvas != null) canvas.zoomOut(); });
+
+        JMenuItem miZoomReset = new JMenuItem("Reset Zoom 100% & Center (Ctrl+0)");
+        miZoomReset.addActionListener(e -> { if (canvas != null) canvas.resetZoomAndPan(); });
+
         JMenuItem miFull = new JMenuItem("Full Screen Preview (F11)");
         miFull.addActionListener(e -> openFullScreenPreview());
+
+        mView.add(miZoomIn);
+        mView.add(miZoomOut);
+        mView.add(miZoomReset);
+        mView.addSeparator();
         mView.add(miFull);
 
         JMenu mTools = new JMenu("Tools");
@@ -1526,10 +1549,50 @@ public class BrokVnClickAreaWindow extends JFrame {
         lblCurrentBounds.setForeground(new Color(255, 215, 0)); // Gold
         row2.add(lblCurrentBounds, BorderLayout.WEST);
 
+        JPanel zoomPnl = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        zoomPnl.setOpaque(false);
+
+        JLabel lblZoomTips = new JLabel("(Scroll: Zoom | Middle/Left-Drag: Pan)");
+        lblZoomTips.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        lblZoomTips.setForeground(cFgSubdued);
+        zoomPnl.add(lblZoomTips);
+        zoomPnl.add(Box.createHorizontalStrut(6));
+
+        JButton btnZoomOut = new JButton(" - ");
+        styleStandardButton(btnZoomOut);
+        btnZoomOut.setToolTipText("Zoom Out (Scroll Down or Ctrl+Minus)");
+        btnZoomOut.addActionListener(e -> { if (canvas != null) canvas.zoomOut(); });
+
+        JButton btnZoomIn = new JButton(" + ");
+        styleStandardButton(btnZoomIn);
+        btnZoomIn.setToolTipText("Zoom In (Scroll Up or Ctrl+Plus)");
+        btnZoomIn.addActionListener(e -> { if (canvas != null) canvas.zoomIn(); });
+
+        JButton btnZoomReset = new JButton("100% / Reset View");
+        styleStandardButton(btnZoomReset);
+        btnZoomReset.setToolTipText("Reset Zoom to 100% and Center Canvas (Double Click or Ctrl+0)");
+        btnZoomReset.addActionListener(e -> { if (canvas != null) canvas.resetZoomAndPan(); });
+
+        zoomPnl.add(btnZoomOut);
+        zoomPnl.add(btnZoomIn);
+        zoomPnl.add(btnZoomReset);
+        row2.add(zoomPnl, BorderLayout.EAST);
+
         canvasStatusBar.add(row1);
         canvasStatusBar.add(row2);
         canvasContainer.add(canvasStatusBar, BorderLayout.SOUTH);
         return canvasContainer;
+    }
+
+    public void updateCanvasStatusInfo() {
+        String res = (currentImage != null) ? (currentImageFile != null ? currentImageFile.getName() + " | [1920x1080 Validated]" : "[1920x1080 Validated]") : "[No Image Loaded]";
+        if (lblImageStatus != null) {
+            int z = (canvas != null) ? (int) Math.round(canvas.getZoom() * 100) : 100;
+            int px = (canvas != null) ? canvas.getPanOffsetX() : 0;
+            int py = (canvas != null) ? canvas.getPanOffsetY() : 0;
+            lblImageStatus.setText(String.format("Engine Canvas: 1920x1080 | %s | Zoom: %d%% | Pan: [%+d, %+d]",
+                    res, z, px, py));
+        }
     }
 
     // =========================================================================
@@ -5843,6 +5906,15 @@ public class BrokVnClickAreaWindow extends JFrame {
         private int dragStartY = -1;
         private boolean isDropHover = false;
 
+        private double userZoom = 1.0;
+        private int panOffsetX = 0;
+        private int panOffsetY = 0;
+        private int panMouseStartX = 0;
+        private int panMouseStartY = 0;
+        private int panOrigOffsetX = 0;
+        private int panOrigOffsetY = 0;
+        private boolean isMiddlePanning = false;
+
         private double currentScale = 1.0;
         private int currentOffsetX = 0;
         private int currentOffsetY = 0;
@@ -5907,16 +5979,64 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
             });
 
+            // Mouse wheel listener for natural zooming anchored at mouse pointer location
+            addMouseWheelListener(e -> {
+                int rot = e.getWheelRotation();
+                if (rot != 0) {
+                    double factor = (rot < 0) ? 1.15 : (1.0 / 1.15);
+                    zoomAt(e.getX(), e.getY(), factor);
+                }
+            });
+
             MouseAdapter ma = new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {
-                    if (e.getButton() == MouseEvent.BUTTON1) {
+                    // Double click (middle click or double-click on empty canvas) -> Reset Zoom to 100% and Center
+                    if (e.getClickCount() == 2 && (SwingUtilities.isMiddleMouseButton(e) || SwingUtilities.isLeftMouseButton(e))) {
+                        int ex = toEngineX(e.getX());
+                        int ey = toEngineY(e.getY());
+                        boolean hitAny = false;
+                        if (activeOverlayObject != null && activeOverlayObject.contains(ex, ey)) hitAny = true;
+                        if (activeTextObject != null && activeTextObject.contains(ex, ey)) hitAny = true;
+                        if (!hitAny) {
+                            resetZoomAndPan();
+                            return;
+                        }
+                    }
+
+                    // 1. Middle Mouse Button (Scroll wheel click) -> Always Pan Canvas
+                    if (SwingUtilities.isMiddleMouseButton(e) || e.getButton() == MouseEvent.BUTTON2) {
+                        isMiddlePanning = true;
+                        currentDragType = DragHandleType.CANVAS_PAN;
+                        panMouseStartX = e.getX();
+                        panMouseStartY = e.getY();
+                        panOrigOffsetX = panOffsetX;
+                        panOrigOffsetY = panOffsetY;
+                        setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                        lblCursorPos.setText(String.format("Panning Canvas... [ Pan: %+d, %+d | Zoom: %d%% ]",
+                                panOffsetX, panOffsetY, (int) Math.round(userZoom * 100)));
+                        return;
+                    }
+
+                    // 2. Left Click -> Check handles or drag/pan canvas
+                    if (SwingUtilities.isLeftMouseButton(e) || e.getButton() == MouseEvent.BUTTON1) {
                         int mouseX = e.getX();
                         int mouseY = e.getY();
                         int engX = toEngineX(mouseX);
                         int engY = toEngineY(mouseY);
 
-                        // 1. Check if clicking on Draggable Waypoint Pins (Point A, B, C...)
+                        // If holding Alt key -> Pan Canvas
+                        if ((e.getModifiersEx() & InputEvent.ALT_DOWN_MASK) != 0) {
+                            currentDragType = DragHandleType.CANVAS_PAN;
+                            panMouseStartX = mouseX;
+                            panMouseStartY = mouseY;
+                            panOrigOffsetX = panOffsetX;
+                            panOrigOffsetY = panOffsetY;
+                            setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                            return;
+                        }
+
+                        // Check Draggable Waypoint Pins (Point A, B, C...)
                         if (chkShowWaypoints == null || chkShowWaypoints.isSelected()) {
                             if (activeOverlayObject != null && activeOverlayObject.useWalkPath) {
                                 for (int i = 0; i < activeOverlayObject.waypoints.size(); i++) {
@@ -5935,7 +6055,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // 2. Check if clicking on Text Object (TEXTNEW)
+                        // Check Text Object (TEXTNEW)
                         TextObject hitTxt = null;
                         if (activeTextObject != null && activeTextObject.contains(engX, engY)) {
                             hitTxt = activeTextObject;
@@ -5964,7 +6084,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                             return;
                         }
 
-                        // 3. Check if clicking on Draggable Character Blue Label Badge
+                        // Check Draggable Character Blue Label Badge
                         if (activeOverlayObject != null && (chkShowOverlays == null || chkShowOverlays.isSelected())) {
                             if (mouseX >= lastRenderedTagX && mouseX <= lastRenderedTagX + lastRenderedTagW &&
                                 mouseY >= lastRenderedTagY && mouseY <= lastRenderedTagY + lastRenderedTagH) {
@@ -5979,7 +6099,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // 4. Check if clicking on Sprite Body (IMAGENEW)
+                        // Check Sprite Body (IMAGENEW)
                         if (chkShowOverlays == null || chkShowOverlays.isSelected()) {
                             OverlayObject hitObj = null;
                             if (activeOverlayObject != null && activeOverlayObject.contains(engX, engY)) {
@@ -6008,10 +6128,22 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // 5. Default: Drag Clicker Selection Rectangle (CLICKERNEW)
-                        dragStartX = engX;
-                        dragStartY = engY;
-                        currentDragType = DragHandleType.CLICKER_BOX;
+                        // If in CLICKER mode and clicking inside native 1920x1080 canvas bounds, start drawing/dragging clicker box
+                        boolean insideNativeBounds = (engX >= 0 && engX <= 1920 && engY >= 0 && engY <= 1080);
+                        if (activeEditTarget == ActiveEditTarget.CLICKER && insideNativeBounds) {
+                            dragStartX = engX;
+                            dragStartY = engY;
+                            currentDragType = DragHandleType.CLICKER_BOX;
+                            return;
+                        }
+
+                        // Otherwise (clicking empty background, outside canvas, or in Image/Text mode): Pan the canvas!
+                        currentDragType = DragHandleType.CANVAS_PAN;
+                        panMouseStartX = mouseX;
+                        panMouseStartY = mouseY;
+                        panOrigOffsetX = panOffsetX;
+                        panOrigOffsetY = panOffsetY;
+                        setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
                     }
                 }
 
@@ -6021,6 +6153,17 @@ public class BrokVnClickAreaWindow extends JFrame {
                     int mouseY = e.getY();
                     int curX = toEngineX(mouseX);
                     int curY = toEngineY(mouseY);
+
+                    // 0. Dragging / Panning Canvas View
+                    if (currentDragType == DragHandleType.CANVAS_PAN || isMiddlePanning) {
+                        panOffsetX = panOrigOffsetX + (mouseX - panMouseStartX);
+                        panOffsetY = panOrigOffsetY + (mouseY - panMouseStartY);
+                        updateCanvasStatusInfo();
+                        lblCursorPos.setText(String.format("Panning Canvas: [ Pan: %+d, %+d | Zoom: %d%% ]",
+                                panOffsetX, panOffsetY, (int) Math.round(userZoom * 100)));
+                        repaint();
+                        return;
+                    }
 
                     // A. Dragging Waypoint Pin
                     if (currentDragType == DragHandleType.WAYPOINT_PIN && activeOverlayObject != null && draggedWaypointIndex >= 0 && draggedWaypointIndex < activeOverlayObject.waypoints.size()) {
@@ -6037,7 +6180,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                         lblCursorPos.setText(String.format("Waypoint %s -> [ X: %d, Y: %d ]", wp.label, wp.x, wp.y));
                         repaint();
                     }
-                    // B. Dragging Character Blue Label -> Drags the Character Sprite along with it!
+                    // B. Dragging Character Blue Label
                     else if (currentDragType == DragHandleType.OVERLAY_LABEL && activeOverlayObject != null) {
                         int dx = curX - labelDragStartEngX;
                         int dy = curY - labelDragStartEngY;
@@ -6113,6 +6256,13 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                 @Override
                 public void mouseReleased(MouseEvent e) {
+                    if (currentDragType == DragHandleType.CANVAS_PAN || isMiddlePanning) {
+                        currentDragType = DragHandleType.NONE;
+                        isMiddlePanning = false;
+                        updateCanvasStatusInfo();
+                        repaint();
+                        return;
+                    }
                     if (currentDragType == DragHandleType.WAYPOINT_PIN) {
                         currentDragType = DragHandleType.NONE;
                         draggedWaypointIndex = -1;
@@ -6202,6 +6352,62 @@ public class BrokVnClickAreaWindow extends JFrame {
             repaint();
         }
 
+        public double getZoom() {
+            return userZoom;
+        }
+
+        public int getPanOffsetX() {
+            return panOffsetX;
+        }
+
+        public int getPanOffsetY() {
+            return panOffsetY;
+        }
+
+        public void zoomIn() {
+            zoomAt(getWidth() / 2, getHeight() / 2, 1.25);
+        }
+
+        public void zoomOut() {
+            zoomAt(getWidth() / 2, getHeight() / 2, 1.0 / 1.25);
+        }
+
+        public void resetZoomAndPan() {
+            userZoom = 1.0;
+            panOffsetX = 0;
+            panOffsetY = 0;
+            updateCanvasStatusInfo();
+            repaint();
+        }
+
+        public void zoomAt(int mouseX, int mouseY, double factor) {
+            int viewW = getWidth();
+            int viewH = getHeight();
+            if (viewW <= 0 || viewH <= 0) return;
+
+            double baseScale = Math.min((double) viewW / 1920.0, (double) viewH / 1080.0);
+            if (baseScale <= 0) baseScale = 1.0;
+
+            int engX = toEngineX(mouseX);
+            int engY = toEngineY(mouseY);
+
+            double newZoom = Math.max(0.20, Math.min(10.0, userZoom * factor));
+            if (Math.abs(newZoom - userZoom) > 0.0001) {
+                userZoom = newZoom;
+                double newScale = baseScale * userZoom;
+                currentScale = newScale;
+
+                panOffsetX = mouseX - (viewW / 2) - (int) Math.round((engX - 960.0) * newScale);
+                panOffsetY = mouseY - (viewH / 2) - (int) Math.round((engY - 540.0) * newScale);
+
+                currentOffsetX = (viewW / 2) + panOffsetX - (int) Math.round(960.0 * newScale);
+                currentOffsetY = (viewH / 2) + panOffsetY - (int) Math.round(540.0 * newScale);
+
+                updateCanvasStatusInfo();
+                repaint();
+            }
+        }
+
         public int toEngineX(int mouseX) {
             if (currentScale <= 0) return 0;
             return (int) Math.round((mouseX - currentOffsetX) / currentScale);
@@ -6231,12 +6437,13 @@ public class BrokVnClickAreaWindow extends JFrame {
 
             double scaleX = (double) viewW / 1920.0;
             double scaleY = (double) viewH / 1080.0;
-            currentScale = Math.min(scaleX, scaleY);
+            double baseScale = Math.min(scaleX, scaleY);
+            currentScale = baseScale * userZoom;
 
             int drawW = (int) Math.round(1920.0 * currentScale);
             int drawH = (int) Math.round(1080.0 * currentScale);
-            currentOffsetX = (viewW - drawW) / 2;
-            currentOffsetY = (viewH - drawH) / 2;
+            currentOffsetX = (viewW / 2) + panOffsetX - (int) Math.round(960.0 * currentScale);
+            currentOffsetY = (viewH / 2) + panOffsetY - (int) Math.round(540.0 * currentScale);
 
             // Frame shadow
             g2.setColor(new Color(10, 10, 12));
