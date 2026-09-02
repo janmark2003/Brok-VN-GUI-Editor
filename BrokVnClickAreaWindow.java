@@ -2278,14 +2278,26 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnDelWp.setToolTipText("Remove the currently selected waypoint");
         btnDelWp.addActionListener(e -> removeSelectedWaypoint());
 
+        JButton btnBringPtA = new JButton("Show Point A");
+        stylePrimaryButton(btnBringPtA, new Color(40, 167, 69)); // Emerald Green
+        btnBringPtA.setToolTipText("Bring Point A (Start Position) directly onto visible screen view");
+        btnBringPtA.addActionListener(e -> bringPointAToScreen());
+
         JButton btnBringPtB = new JButton("Show Point B");
-        stylePrimaryButton(btnBringPtB, new Color(0, 155, 225));
-        btnBringPtB.setToolTipText("If Point B is offscreen or overlapping, brings Point B directly into visible screen view");
+        stylePrimaryButton(btnBringPtB, new Color(0, 155, 225)); // Dodger Blue
+        btnBringPtB.setToolTipText("Bring Point B (Target Position) directly onto visible screen view");
         btnBringPtB.addActionListener(e -> bringPointBToScreen());
+
+        JButton btnBringSelected = new JButton("Show Selected");
+        styleStandardButton(btnBringSelected);
+        btnBringSelected.setToolTipText("Bring whichever waypoint is selected in the dropdown directly into visible view");
+        btnBringSelected.addActionListener(e -> bringSelectedWaypointToScreen());
 
         wpBtns.add(btnAddWp);
         wpBtns.add(btnDelWp);
+        wpBtns.add(btnBringPtA);
         wpBtns.add(btnBringPtB);
+        wpBtns.add(btnBringSelected);
         wpManagePanel.add(wpBtns, BorderLayout.EAST);
         wgbc.gridx = 1; wgbc.gridy = 1; wgbc.weightx = 0.65;
         walkBox.add(wpManagePanel, wgbc);
@@ -2323,9 +2335,20 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel walkPresetBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         walkPresetBar.setOpaque(false);
 
-        JButton btnPresetBringB = new JButton("Bring Point B to Screen");
+        JButton btnPresetBringA = new JButton("Show Point A");
+        stylePrimaryButton(btnPresetBringA, new Color(40, 167, 69));
+        btnPresetBringA.setToolTipText("Bring Point A to screen");
+        btnPresetBringA.addActionListener(e -> bringPointAToScreen());
+
+        JButton btnPresetBringB = new JButton("Show Point B");
         stylePrimaryButton(btnPresetBringB, new Color(0, 155, 225));
+        btnPresetBringB.setToolTipText("Bring Point B to screen");
         btnPresetBringB.addActionListener(e -> bringPointBToScreen());
+
+        JButton btnPresetBringAll = new JButton("Show All Points on Screen");
+        stylePrimaryButton(btnPresetBringAll, new Color(255, 152, 0)); // Amber / Gold
+        btnPresetBringAll.setToolTipText("Arrange all waypoints (Point A, B, C, D...) so every single point is visible on screen");
+        btnPresetBringAll.addActionListener(e -> bringAllPointsToScreen());
 
         JButton btnPresetWalk65R = new JButton("Walk 65% Width (Right)");
         styleStandardButton(btnPresetWalk65R);
@@ -2339,7 +2362,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         styleStandardButton(btnPresetWalkFull);
         btnPresetWalkFull.addActionListener(e -> setWalkPreset(1.0, true));
 
+        walkPresetBar.add(btnPresetBringA);
         walkPresetBar.add(btnPresetBringB);
+        walkPresetBar.add(btnPresetBringAll);
         walkPresetBar.add(btnPresetWalk65R);
         walkPresetBar.add(btnPresetWalk65L);
         walkPresetBar.add(btnPresetWalkFull);
@@ -2899,6 +2924,48 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (canvas != null) canvas.repaint();
     }
 
+    public void bringPointAToScreen() {
+        if (activeOverlayObject == null) {
+            JOptionPane.showMessageDialog(this, "Please place a sprite first.", "No Sprite", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        activeOverlayObject.useWalkPath = true;
+        if (chkUseWalkPath != null) chkUseWalkPath.setSelected(true);
+
+        if (activeOverlayObject.waypoints.isEmpty()) {
+            activeOverlayObject.initDefaultWaypoints();
+        }
+
+        Waypoint ptA = activeOverlayObject.waypoints.get(0);
+        int curAx = ptA.x;
+        int curAy = ptA.y;
+
+        if (curAx < 100 || curAx > 1820 || curAy < 100 || curAy > 980) {
+            curAx = 250;
+            curAy = Math.max(120, Math.min(960, activeOverlayObject.getAnchorY()));
+            ptA.x = curAx;
+            ptA.y = curAy;
+        }
+
+        activeOverlayObject.setFromAnchor(ptA.x, ptA.y);
+
+        refreshWaypointSelector();
+        if (cmbWaypointSelector != null && cmbWaypointSelector.getItemCount() > 0) {
+            cmbWaypointSelector.setSelectedIndex(0);
+        }
+        syncWaypointUiFromSelection();
+        syncImageUiFromActiveObject();
+        updateWalkDistanceLabel();
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+
+        JOptionPane.showMessageDialog(this,
+                String.format("Point A is now visible on screen at [ X: %d, Y: %d ]!\nSprite anchor aligned to Point A.",
+                        ptA.x, ptA.y),
+                "Point A Brought to View", JOptionPane.INFORMATION_MESSAGE);
+    }
+
     public void bringPointBToScreen() {
         if (activeOverlayObject == null) {
             JOptionPane.showMessageDialog(this, "Please place a sprite first.", "No Sprite", JOptionPane.WARNING_MESSAGE);
@@ -2914,11 +2981,8 @@ public class BrokVnClickAreaWindow extends JFrame {
         Waypoint ptA = activeOverlayObject.waypoints.get(0);
         Waypoint ptB = activeOverlayObject.waypoints.get(1);
 
-        int curAx = activeOverlayObject.getAnchorX();
-        int curAy = activeOverlayObject.getAnchorY();
-
-        ptA.x = curAx;
-        ptA.y = curAy;
+        int curAx = ptA.x;
+        int curAy = ptA.y;
 
         int targetBx = curAx + 650;
         if (targetBx > 1750) {
@@ -2954,6 +3018,93 @@ public class BrokVnClickAreaWindow extends JFrame {
                 String.format("Point B is now visible on screen at [ X: %d, Y: %d ]!\nWalk Path Distance: %d px",
                         ptB.x, ptB.y, Math.abs(ptB.x - ptA.x)),
                 "Point B Brought to View", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public void bringSelectedWaypointToScreen() {
+        if (activeOverlayObject == null || activeOverlayObject.waypoints.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please place a sprite with a walk path first.", "No Waypoints", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int idx = (cmbWaypointSelector != null) ? cmbWaypointSelector.getSelectedIndex() : 0;
+        if (idx < 0 || idx >= activeOverlayObject.waypoints.size()) idx = 0;
+
+        Waypoint wp = activeOverlayObject.waypoints.get(idx);
+        int safeX = Math.max(150, Math.min(1770, wp.x));
+        int safeY = Math.max(120, Math.min(960, wp.y));
+
+        if (wp.x < 100 || wp.x > 1820 || wp.y < 100 || wp.y > 980) {
+            if (idx == 0) {
+                safeX = 250;
+                safeY = 540;
+            } else {
+                Waypoint prev = activeOverlayObject.waypoints.get(idx - 1);
+                safeX = Math.max(150, Math.min(1770, prev.x + 250));
+                safeY = prev.y;
+            }
+        }
+        wp.x = safeX;
+        wp.y = safeY;
+
+        if (idx == 0) {
+            activeOverlayObject.setFromAnchor(wp.x, wp.y);
+            syncImageUiFromActiveObject();
+        }
+
+        refreshWaypointSelector();
+        if (cmbWaypointSelector != null) cmbWaypointSelector.setSelectedIndex(idx);
+        syncWaypointUiFromSelection();
+        updateWalkDistanceLabel();
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+
+        JOptionPane.showMessageDialog(this,
+                String.format("%s is now brought into screen view at [ X: %d, Y: %d ]!", wp.label, wp.x, wp.y),
+                wp.label + " Visible on Screen", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public void bringAllPointsToScreen() {
+        if (activeOverlayObject == null) {
+            JOptionPane.showMessageDialog(this, "Please place a sprite first.", "No Sprite", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        activeOverlayObject.useWalkPath = true;
+        if (chkUseWalkPath != null) chkUseWalkPath.setSelected(true);
+
+        if (activeOverlayObject.waypoints.size() < 2) {
+            activeOverlayObject.initDefaultWaypoints();
+        }
+
+        int count = activeOverlayObject.waypoints.size();
+        int curAy = Math.max(150, Math.min(930, activeOverlayObject.getAnchorY()));
+        int startX = 250;
+        int endX = 1670;
+        int stepX = (count > 1) ? (endX - startX) / (count - 1) : 0;
+
+        for (int i = 0; i < count; i++) {
+            Waypoint wp = activeOverlayObject.waypoints.get(i);
+            wp.x = startX + i * stepX;
+            wp.y = curAy;
+        }
+
+        activeOverlayObject.setFromAnchor(activeOverlayObject.waypoints.get(0).x, activeOverlayObject.waypoints.get(0).y);
+
+        refreshWaypointSelector();
+        if (cmbWaypointSelector != null && cmbWaypointSelector.getItemCount() > 0) {
+            cmbWaypointSelector.setSelectedIndex(0);
+        }
+        syncWaypointUiFromSelection();
+        syncImageUiFromActiveObject();
+        updateWalkDistanceLabel();
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+
+        char lastLetter = (char) ('A' + count - 1);
+        JOptionPane.showMessageDialog(this,
+                String.format("All %d waypoints (Point A to Point %c) are now visible and evenly spaced across the canvas!",
+                        count, lastLetter),
+                "All Waypoints Brought to View", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void updateWalkDistanceLabel() {
@@ -6141,19 +6292,40 @@ public class BrokVnClickAreaWindow extends JFrame {
                         }
 
                         // Draw Draggable Waypoint Pins (Point A, B, C...) with glowing halos
+                        int selWpIdx = (cmbWaypointSelector != null) ? cmbWaypointSelector.getSelectedIndex() : -1;
                         for (int w = 0; w < obj.waypoints.size(); w++) {
                             Waypoint wp = obj.waypoints.get(w);
                             int px = toScreenX(wp.x);
                             int py = toScreenY(wp.y);
 
-                            boolean isPtB = (w == 1 || w == obj.waypoints.size() - 1);
-                            Color pinColor = (w == 0) ? new Color(85, 215, 105) : (isPtB ? new Color(255, 60, 60) : new Color(0, 180, 255));
+                            boolean isStart = (w == 0);
+                            boolean isTarget = (w == obj.waypoints.size() - 1);
+                            boolean isSelected = (obj == activeOverlayObject && w == selWpIdx);
 
-                            // Glowing halo around Point B so it's always super clear and never lost
-                            if (isPtB) {
-                                g2.setColor(new Color(255, 60, 60, 70));
+                            // Color-coded waypoint pins
+                            Color pinColor;
+                            if (isStart) {
+                                pinColor = new Color(40, 190, 80); // Emerald Green for Point A
+                            } else if (isTarget) {
+                                pinColor = new Color(255, 60, 60); // Crimson for Target / Point B
+                            } else {
+                                Color[] wpPalette = {
+                                        new Color(0, 180, 255),  // Electric Blue
+                                        new Color(255, 180, 20), // Amber Gold
+                                        new Color(190, 80, 255), // Purple Neon
+                                        new Color(0, 230, 200),  // Cyan Teal
+                                        new Color(255, 105, 180) // Hot Pink
+                                };
+                                pinColor = wpPalette[(w - 1) % wpPalette.length];
+                            }
+
+                            // Glowing halo around active/selected point or target points
+                            if (isSelected || isTarget || isStart) {
+                                int haloAlpha = isSelected ? 110 : 60;
+                                Color haloCol = isSelected ? new Color(255, 230, 0, haloAlpha) : new Color(pinColor.getRed(), pinColor.getGreen(), pinColor.getBlue(), haloAlpha);
+                                g2.setColor(haloCol);
                                 g2.fillOval(px - 14, py - 14, 28, 28);
-                                g2.setColor(new Color(255, 220, 0, 140));
+                                g2.setColor(isSelected ? new Color(255, 255, 0, 200) : new Color(pinColor.getRed(), pinColor.getGreen(), pinColor.getBlue(), 160));
                                 g2.setStroke(new BasicStroke(1.5f));
                                 g2.drawOval(px - 14, py - 14, 28, 28);
                             }
@@ -6161,11 +6333,16 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.setColor(pinColor);
                             g2.fillOval(px - 8, py - 8, 16, 16);
                             g2.setColor(Color.WHITE);
-                            g2.setStroke(new BasicStroke(2.0f));
+                            g2.setStroke(new BasicStroke(isSelected ? 2.5f : 1.8f));
                             g2.drawOval(px - 8, py - 8, 16, 16);
 
                             g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
-                            String pinTag = wp.label + (isPtB ? " (Target)" : "");
+                            String pinTag = wp.label;
+                            if (isStart) {
+                                pinTag += " (Start)";
+                            } else if (isTarget) {
+                                pinTag += " (Target)";
+                            }
                             FontMetrics pfm = g2.getFontMetrics();
                             int ptw = pfm.stringWidth(pinTag) + 8;
 
@@ -6174,7 +6351,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                             g2.setColor(new Color(15, 20, 25, 230));
                             g2.fillRoundRect(clampedPinTagX, clampedPinTagY, ptw, 18, 6, 6);
-                            g2.setColor(pinColor);
+                            g2.setColor(isSelected ? new Color(255, 220, 0) : pinColor);
                             g2.drawRoundRect(clampedPinTagX, clampedPinTagY, ptw, 18, 6, 6);
                             g2.setColor(Color.WHITE);
                             g2.drawString(pinTag, clampedPinTagX + 4, clampedPinTagY + 13);
