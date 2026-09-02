@@ -959,15 +959,19 @@ public class BrokVnClickAreaWindow extends JFrame {
         // Top Menu Bar
         setJMenuBar(buildMenuBar());
 
-        // Top Toolbar
-        JPanel topBar = new JPanel(new BorderLayout(8, 0));
+        // Top Toolbar (Structured 2-Tier Header)
+        JPanel topBar = new JPanel(new GridLayout(2, 1, 0, 4));
         topBar.setBackground(cPanelBg);
         topBar.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, cBorder),
-                BorderFactory.createEmptyBorder(6, 12, 6, 12)));
+                BorderFactory.createEmptyBorder(5, 10, 5, 10)));
 
-        JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        leftActions.setOpaque(false);
+        // Row 1: File & Asset Actions + Global Tools
+        JPanel row1 = new JPanel(new BorderLayout(8, 0));
+        row1.setOpaque(false);
+
+        JPanel row1Left = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        row1Left.setOpaque(false);
 
         JButton btnImportBg = new JButton("Import Background...");
         stylePrimaryButton(btnImportBg, new Color(0, 122, 255));
@@ -995,19 +999,51 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnOpenExplorer.setToolTipText("Open the last browsed folder directly in Windows Explorer (explorer.exe)");
         btnOpenExplorer.addActionListener(e -> openInExplorer(getLastBrowseDirectory()));
 
-        leftActions.add(btnImportBg);
-        leftActions.add(btnPlaceObject);
-        leftActions.add(btnImportSpritesheet);
-        leftActions.add(btnClearOverlays);
-        leftActions.add(btnOpenExplorer);
+        row1Left.add(btnImportBg);
+        row1Left.add(btnPlaceObject);
+        row1Left.add(btnImportSpritesheet);
+        row1Left.add(btnClearOverlays);
+        row1Left.add(btnOpenExplorer);
 
-        JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        rightActions.setOpaque(false);
+        JPanel row1Right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        row1Right.setOpaque(false);
 
-        btnTargetClicker = new JToggleButton("Edit Clicker", true);
-        btnTargetImage = new JToggleButton("Edit Sprite", false);
-        styleStandardButton(btnTargetClicker);
-        styleStandardButton(btnTargetImage);
+        JButton btnFullScreenPreview = new JButton("Full Screen (F11)");
+        stylePrimaryButton(btnFullScreenPreview, new Color(230, 110, 0));
+        btnFullScreenPreview.setToolTipText("Open borderless full-screen preview with interactive testing (F11)");
+        btnFullScreenPreview.addActionListener(e -> openFullScreenPreview());
+
+        JButton btnGlueIt = new JButton("Glue It Maker");
+        styleStandardButton(btnGlueIt);
+        btnGlueIt.setToolTipText("Launch GlueIT Sprite Sheet Maker (glueit.exe)");
+        btnGlueIt.addActionListener(e -> launchGlueIt());
+
+        JButton btnCheckUpdate = new JButton("Check Updates");
+        styleStandardButton(btnCheckUpdate);
+        btnCheckUpdate.setToolTipText("Check for newer BrokVN GUI Editor updates from GitHub");
+        btnCheckUpdate.addActionListener(e -> showUpdateDialog(false));
+
+        row1Right.add(btnFullScreenPreview);
+        row1Right.add(btnGlueIt);
+        row1Right.add(btnCheckUpdate);
+
+        row1.add(row1Left, BorderLayout.WEST);
+        row1.add(row1Right, BorderLayout.EAST);
+
+        // Row 2: Active Tool Mode & View Overlays
+        JPanel row2 = new JPanel(new BorderLayout(8, 0));
+        row2.setOpaque(false);
+
+        JPanel row2Left = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        row2Left.setOpaque(false);
+
+        JLabel lblToolMode = createStyledLabel("Active Tool:");
+        lblToolMode.setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+        btnTargetClicker = new JToggleButton("Edit Clicker (CLICKERNEW)", true);
+        btnTargetImage = new JToggleButton("Edit Sprite (IMAGENEW)", false);
+        styleToggleButton(btnTargetClicker);
+        styleToggleButton(btnTargetImage);
         btnTargetClicker.setToolTipText("Interactive mode: Dragging sets CLICKERNEW coordinates (X1, Y1, X2, Y2)");
         btnTargetImage.setToolTipText("Interactive mode: Dragging moves placed IMAGENEW sprite position (X, Y)");
 
@@ -1031,6 +1067,13 @@ public class BrokVnClickAreaWindow extends JFrame {
                 canvas.repaint();
         });
 
+        row2Left.add(lblToolMode);
+        row2Left.add(btnTargetClicker);
+        row2Left.add(btnTargetImage);
+
+        JPanel row2Right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        row2Right.setOpaque(false);
+
         chkShowOverlays = new JCheckBox("Show Sprites", true);
         styleCheckBox(chkShowOverlays);
         chkShowOverlays.addActionListener(e -> canvas.repaint());
@@ -1047,35 +1090,16 @@ public class BrokVnClickAreaWindow extends JFrame {
         styleCheckBox(chkShowWaypoints);
         chkShowWaypoints.addActionListener(e -> canvas.repaint());
 
-        JButton btnFullScreenPreview = new JButton("Full Screen (F11)");
-        stylePrimaryButton(btnFullScreenPreview, new Color(230, 110, 0));
-        btnFullScreenPreview.setToolTipText("Open borderless full-screen preview with interactive testing (F11)");
-        btnFullScreenPreview.addActionListener(e -> openFullScreenPreview());
+        row2Right.add(chkShowOverlays);
+        row2Right.add(chkShowGrid);
+        row2Right.add(chkShowAllClickers);
+        row2Right.add(chkShowWaypoints);
 
-        JButton btnGlueIt = new JButton("Glue It Maker");
-        styleStandardButton(btnGlueIt);
-        btnGlueIt.setToolTipText("Launch GlueIT Sprite Sheet Maker (glueit.exe)");
-        btnGlueIt.addActionListener(e -> launchGlueIt());
+        row2.add(row2Left, BorderLayout.WEST);
+        row2.add(row2Right, BorderLayout.EAST);
 
-        JButton btnCheckUpdate = new JButton("Check Updates");
-        styleStandardButton(btnCheckUpdate);
-        btnCheckUpdate.setToolTipText("Check for newer BrokVN GUI Editor updates from GitHub");
-        btnCheckUpdate.addActionListener(e -> showUpdateDialog(false));
-
-        rightActions.add(btnTargetClicker);
-        rightActions.add(btnTargetImage);
-        rightActions.add(Box.createHorizontalStrut(4));
-        rightActions.add(chkShowOverlays);
-        rightActions.add(chkShowGrid);
-        rightActions.add(chkShowAllClickers);
-        rightActions.add(chkShowWaypoints);
-        rightActions.add(Box.createHorizontalStrut(4));
-        rightActions.add(btnFullScreenPreview);
-        rightActions.add(btnGlueIt);
-        rightActions.add(btnCheckUpdate);
-
-        topBar.add(leftActions, BorderLayout.WEST);
-        topBar.add(rightActions, BorderLayout.EAST);
+        topBar.add(row1);
+        topBar.add(row2);
 
         JPanel canvasContainer = buildCanvasContainer();
         JPanel rightPanel = buildRightPanel();
@@ -2934,7 +2958,9 @@ public class BrokVnClickAreaWindow extends JFrame {
 
     private void applyThemeToContainer(Container container) {
         for (Component c : container.getComponents()) {
-            if (c instanceof JButton) {
+            if (c instanceof JToggleButton) {
+                updateToggleVisual((JToggleButton) c);
+            } else if (c instanceof JButton) {
                 JButton btn = (JButton) c;
                 Color bg = btn.getBackground();
                 if (bg != null && (bg.equals(new Color(35, 134, 54)) || bg.equals(new Color(0, 122, 255)) || bg.equals(new Color(0, 155, 225)) || bg.equals(new Color(130, 80, 220)) || bg.equals(new Color(230, 110, 0)))) {
@@ -3008,6 +3034,38 @@ public class BrokVnClickAreaWindow extends JFrame {
         lbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lbl.setForeground(cFg);
         return lbl;
+    }
+
+    private void styleToggleButton(JToggleButton btn) {
+        if (btn == null) return;
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btn.setFocusPainted(false);
+        btn.setRolloverEnabled(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        ItemListener updater = e -> updateToggleVisual(btn);
+        btn.addItemListener(updater);
+        btn.addChangeListener(e -> updateToggleVisual(btn));
+        updateToggleVisual(btn);
+    }
+
+    private void updateToggleVisual(JToggleButton btn) {
+        if (btn == null) return;
+        if (btn.isSelected()) {
+            btn.setBackground(new Color(0, 115, 230)); // Vibrant Royal Blue
+            btn.setForeground(Color.WHITE); // Crisp White
+            btn.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(new Color(0, 185, 255), 1),
+                    new EmptyBorder(4, 12, 4, 12)));
+        } else {
+            btn.setBackground(isDarkMode ? new Color(42, 47, 58) : new Color(225, 230, 240));
+            btn.setForeground(isDarkMode ? new Color(190, 200, 215) : new Color(45, 50, 60));
+            btn.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(cBorder, 1),
+                    new EmptyBorder(4, 12, 4, 12)));
+        }
+        btn.setOpaque(true);
+        btn.setContentAreaFilled(true);
     }
 
     private void styleStandardButton(AbstractButton btn) {
