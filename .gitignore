@@ -1,0 +1,19 @@
+# Build and Distribution directories
+build/
+dist/
+.gradle/
+*.class
+
+# Logs and temp files
+*.log
+cabal-install-tidal.log
+.emulator_console_auth_token
+.gitconfig
+.viminfo
+.wget-hsts
+LanguageSelect.java
+
+# IDE files
+.idea/
+.vscode/
+*.iml
