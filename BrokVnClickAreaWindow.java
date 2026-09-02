@@ -1074,20 +1074,17 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel row2Right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         row2Right.setOpaque(false);
 
-        chkShowOverlays = new JCheckBox("Show Sprites", true);
-        styleCheckBox(chkShowOverlays);
-        chkShowOverlays.addActionListener(e -> canvas.repaint());
+        JButton btnBringPointBToolbar = new JButton("📍 Show Point B");
+        stylePrimaryButton(btnBringPointBToolbar, new Color(0, 155, 225));
+        btnBringPointBToolbar.setToolTipText("If Point B is offscreen or overlapping, brings Point B directly into visible canvas view");
+        btnBringPointBToolbar.addActionListener(e -> bringPointBToScreen());
 
-        chkShowGrid = new JCheckBox("Grid", false);
-        styleCheckBox(chkShowGrid);
-        chkShowGrid.addActionListener(e -> canvas.repaint());
-
-        chkShowAllClickers = new JCheckBox("All Clickers", true);
-        styleCheckBox(chkShowAllClickers);
-        chkShowAllClickers.addActionListener(e -> canvas.repaint());
-
-        chkShowWaypoints = new JCheckBox("Waypoints", true);
-        styleCheckBox(chkShowWaypoints);
+        row2Right.add(btnBringPointBToolbar);
+        row2Right.add(Box.createHorizontalStrut(4));
+        row2Right.add(chkShowOverlays);
+        row2Right.add(chkShowGrid);
+        row2Right.add(chkShowAllClickers);
+        row2Right.add(chkShowWaypoints);
         chkShowWaypoints.addActionListener(e -> canvas.repaint());
 
         row2Right.add(chkShowOverlays);
@@ -1965,8 +1962,14 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnDelWp.setToolTipText("Remove the currently selected waypoint");
         btnDelWp.addActionListener(e -> removeSelectedWaypoint());
 
+        JButton btnBringPtB = new JButton("📍 Show Point B");
+        stylePrimaryButton(btnBringPtB, new Color(0, 155, 225));
+        btnBringPtB.setToolTipText("If Point B is offscreen or overlapping, brings Point B directly into visible screen view");
+        btnBringPtB.addActionListener(e -> bringPointBToScreen());
+
         wpBtns.add(btnAddWp);
         wpBtns.add(btnDelWp);
+        wpBtns.add(btnBringPtB);
         wpManagePanel.add(wpBtns, BorderLayout.EAST);
         wgbc.gridx = 1; wgbc.gridy = 1; wgbc.weightx = 0.65;
         walkBox.add(wpManagePanel, wgbc);
@@ -2004,8 +2007,12 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel walkPresetBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         walkPresetBar.setOpaque(false);
 
+        JButton btnPresetBringB = new JButton("📍 Bring Point B to Screen");
+        stylePrimaryButton(btnPresetBringB, new Color(0, 155, 225));
+        btnPresetBringB.addActionListener(e -> bringPointBToScreen());
+
         JButton btnPresetWalk65R = new JButton("Walk 65% Width (Right)");
-        stylePrimaryButton(btnPresetWalk65R, new Color(0, 155, 225));
+        styleStandardButton(btnPresetWalk65R);
         btnPresetWalk65R.addActionListener(e -> setWalkPreset(0.65, true));
 
         JButton btnPresetWalk65L = new JButton("Walk 65% Width (Left)");
@@ -2016,6 +2023,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         styleStandardButton(btnPresetWalkFull);
         btnPresetWalkFull.addActionListener(e -> setWalkPreset(1.0, true));
 
+        walkPresetBar.add(btnPresetBringB);
         walkPresetBar.add(btnPresetWalk65R);
         walkPresetBar.add(btnPresetWalk65L);
         walkPresetBar.add(btnPresetWalkFull);
@@ -2178,6 +2186,63 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         syncImageUiFromActiveObject();
         if (canvas != null) canvas.repaint();
+    }
+
+    public void bringPointBToScreen() {
+        if (activeOverlayObject == null) {
+            JOptionPane.showMessageDialog(this, "Please place a sprite first.", "No Sprite", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        activeOverlayObject.useWalkPath = true;
+        if (chkUseWalkPath != null) chkUseWalkPath.setSelected(true);
+
+        if (activeOverlayObject.waypoints.size() < 2) {
+            activeOverlayObject.initDefaultWaypoints();
+        }
+
+        Waypoint ptA = activeOverlayObject.waypoints.get(0);
+        Waypoint ptB = activeOverlayObject.waypoints.get(1);
+
+        int curAx = activeOverlayObject.getAnchorX();
+        int curAy = activeOverlayObject.getAnchorY();
+
+        ptA.x = curAx;
+        ptA.y = curAy;
+
+        int targetBx = curAx + 650;
+        if (targetBx > 1750) {
+            targetBx = Math.max(150, curAx - 650);
+        }
+        if (targetBx == curAx) {
+            targetBx = 1450;
+        }
+
+        int targetBy = Math.max(120, Math.min(960, curAy));
+        ptB.x = targetBx;
+        ptB.y = targetBy;
+
+        for (int i = 2; i < activeOverlayObject.waypoints.size(); i++) {
+            Waypoint wp = activeOverlayObject.waypoints.get(i);
+            if (wp.x < 50 || wp.x > 1870 || wp.y < 50 || wp.y > 1030) {
+                wp.x = Math.max(100, Math.min(1820, targetBx + (i - 1) * 120));
+                wp.y = targetBy;
+            }
+        }
+
+        refreshWaypointSelector();
+        if (cmbWaypointSelector != null && cmbWaypointSelector.getItemCount() > 1) {
+            cmbWaypointSelector.setSelectedIndex(1);
+        }
+        syncWaypointUiFromSelection();
+        updateWalkDistanceLabel();
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+
+        JOptionPane.showMessageDialog(this,
+                String.format("Point B is now visible on screen at [ X: %d, Y: %d ]!\nWalk Path Distance: %d px",
+                        ptB.x, ptB.y, Math.abs(ptB.x - ptA.x)),
+                "Point B Brought to View", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void updateWalkDistanceLabel() {
@@ -4171,6 +4236,16 @@ public class BrokVnClickAreaWindow extends JFrame {
         private int currentOffsetX = 0;
         private int currentOffsetY = 0;
 
+        // Label drag & bounds tracking
+        private int labelDragStartEngX = 0;
+        private int labelDragStartEngY = 0;
+        private int overlayDragOrigSpriteX = 0;
+        private int overlayDragOrigSpriteY = 0;
+        private int lastRenderedTagX = -1000;
+        private int lastRenderedTagY = -1000;
+        private int lastRenderedTagW = 200;
+        private int lastRenderedTagH = 22;
+
         public ClickAreaCanvas() {
             setBackground(isDarkMode ? new Color(16, 17, 20) : new Color(205, 208, 215));
             setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
@@ -4230,18 +4305,18 @@ public class BrokVnClickAreaWindow extends JFrame {
                         int engX = toEngineX(mouseX);
                         int engY = toEngineY(mouseY);
 
-                        // 1. Check if clicking on Draggable Waypoint Pins
+                        // 1. Check if clicking on Draggable Waypoint Pins (Point A, B, C...)
                         if (chkShowWaypoints == null || chkShowWaypoints.isSelected()) {
                             if (activeOverlayObject != null && activeOverlayObject.useWalkPath) {
                                 for (int i = 0; i < activeOverlayObject.waypoints.size(); i++) {
                                     Waypoint wp = activeOverlayObject.waypoints.get(i);
                                     int pinSx = toScreenX(wp.x);
                                     int pinSy = toScreenY(wp.y);
-                                    if (Math.hypot(mouseX - pinSx, mouseY - pinSy) <= 12) {
+                                    if (Math.hypot(mouseX - pinSx, mouseY - pinSy) <= 16) {
                                         currentDragType = DragHandleType.WAYPOINT_PIN;
                                         draggedWaypointIndex = i;
                                         if (cmbWaypointSelector != null) cmbWaypointSelector.setSelectedIndex(i);
-                                        lblCursorPos.setText(String.format("Dragging %s at [ X: %d, Y: %d ]", wp.label, wp.x, wp.y));
+                                        lblCursorPos.setText(String.format("Dragging Waypoint %s at [ X: %d, Y: %d ]", wp.label, wp.x, wp.y));
                                         repaint();
                                         return;
                                     }
@@ -4251,12 +4326,14 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                         // 2. Check if clicking on Draggable Character Blue Label Badge
                         if (activeOverlayObject != null && (chkShowOverlays == null || chkShowOverlays.isSelected())) {
-                            int tagSx = toScreenX(activeOverlayObject.x) + activeOverlayObject.labelOffsetX;
-                            int tagSy = toScreenY(activeOverlayObject.y) + activeOverlayObject.labelOffsetY;
-                            if (mouseX >= tagSx && mouseX <= tagSx + 220 && mouseY >= tagSy && mouseY <= tagSy + 22) {
+                            if (mouseX >= lastRenderedTagX && mouseX <= lastRenderedTagX + lastRenderedTagW &&
+                                mouseY >= lastRenderedTagY && mouseY <= lastRenderedTagY + lastRenderedTagH) {
                                 currentDragType = DragHandleType.OVERLAY_LABEL;
-                                labelDragStartX = mouseX - tagSx;
-                                labelDragStartY = mouseY - tagSy;
+                                labelDragStartEngX = engX;
+                                labelDragStartEngY = engY;
+                                overlayDragOrigSpriteX = activeOverlayObject.x;
+                                overlayDragOrigSpriteY = activeOverlayObject.y;
+                                lblCursorPos.setText(String.format("Moving Character '%s' via Blue Label Badge", activeOverlayObject.imageId));
                                 repaint();
                                 return;
                             }
@@ -4320,14 +4397,36 @@ public class BrokVnClickAreaWindow extends JFrame {
                         lblCursorPos.setText(String.format("Waypoint %s -> [ X: %d, Y: %d ]", wp.label, wp.x, wp.y));
                         repaint();
                     }
-                    // B. Dragging Character Blue Label
+                    // B. Dragging Character Blue Label -> Drags the Character Sprite along with it!
                     else if (currentDragType == DragHandleType.OVERLAY_LABEL && activeOverlayObject != null) {
-                        activeOverlayObject.customLabelPos = true;
-                        activeOverlayObject.labelOffsetX = mouseX - toScreenX(activeOverlayObject.x) - labelDragStartX;
-                        activeOverlayObject.labelOffsetY = mouseY - toScreenY(activeOverlayObject.y) - labelDragStartY;
+                        int dx = curX - labelDragStartEngX;
+                        int dy = curY - labelDragStartEngY;
+                        int newX = overlayDragOrigSpriteX + dx;
+                        int newY = overlayDragOrigSpriteY + dy;
+                        int stepDx = newX - activeOverlayObject.x;
+                        int stepDy = newY - activeOverlayObject.y;
+                        activeOverlayObject.x = newX;
+                        activeOverlayObject.y = newY;
+
+                        if (activeOverlayObject.useWalkPath && !activeOverlayObject.waypoints.isEmpty()) {
+                            activeOverlayObject.waypoints.get(0).x = activeOverlayObject.getAnchorX();
+                            activeOverlayObject.waypoints.get(0).y = activeOverlayObject.getAnchorY();
+                        }
+
+                        if (chkSyncClickerWithImage == null || chkSyncClickerWithImage.isSelected()) {
+                            curX1 += stepDx;
+                            curY1 += stepDy;
+                            curX2 += stepDx;
+                            curY2 += stepDy;
+                            setBoundsCoordinates(curX1, curY1, curX2, curY2);
+                        }
+
+                        syncImageUiFromActiveObject();
+                        lblCursorPos.setText(String.format("Sprite '%s' -> [ Anchor X: %d, Y: %d ]",
+                                activeOverlayObject.imageId, activeOverlayObject.getAnchorX(), activeOverlayObject.getAnchorY()));
                         repaint();
                     }
-                    // C. Dragging Sprite
+                    // C. Dragging Sprite Body
                     else if (currentDragType == DragHandleType.OVERLAY_SPRITE && activeOverlayObject != null) {
                         int newX = curX - overlayDragOffsetX;
                         int newY = curY - overlayDragOffsetY;
@@ -4370,12 +4469,9 @@ public class BrokVnClickAreaWindow extends JFrame {
                         refreshWaypointSelector();
                         updateScriptPreview();
                         repaint();
-                    } else if (currentDragType == DragHandleType.OVERLAY_SPRITE) {
+                    } else if (currentDragType == DragHandleType.OVERLAY_SPRITE || currentDragType == DragHandleType.OVERLAY_LABEL) {
                         currentDragType = DragHandleType.NONE;
                         updateScriptPreview();
-                        repaint();
-                    } else if (currentDragType == DragHandleType.OVERLAY_LABEL) {
-                        currentDragType = DragHandleType.NONE;
                         repaint();
                     } else if (currentDragType == DragHandleType.CLICKER_BOX) {
                         int curX = toEngineX(e.getX());
@@ -4397,11 +4493,20 @@ public class BrokVnClickAreaWindow extends JFrame {
                         for (Waypoint wp : activeOverlayObject.waypoints) {
                             int pinSx = toScreenX(wp.x);
                             int pinSy = toScreenY(wp.y);
-                            if (Math.hypot(mouseX - pinSx, mouseY - pinSy) <= 12) {
+                            if (Math.hypot(mouseX - pinSx, mouseY - pinSy) <= 16) {
                                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                                lblCursorPos.setText(String.format("Over %s [ X: %d, Y: %d ] (Drag to move pin)", wp.label, wp.x, wp.y));
+                                lblCursorPos.setText(String.format("Over Waypoint %s [ X: %d, Y: %d ] (Drag to move pin)", wp.label, wp.x, wp.y));
                                 return;
                             }
+                        }
+                    }
+
+                    if (activeOverlayObject != null) {
+                        if (mouseX >= lastRenderedTagX && mouseX <= lastRenderedTagX + lastRenderedTagW &&
+                            mouseY >= lastRenderedTagY && mouseY <= lastRenderedTagY + lastRenderedTagH) {
+                            setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                            lblCursorPos.setText(String.format("Over Label '%s' (Drag to move character)", activeOverlayObject.imageId));
+                            return;
                         }
                     }
 
@@ -4501,49 +4606,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                 List<OverlayObject> sortedOverlays = new ArrayList<>(overlayObjects);
                 sortedOverlays.sort((o1, o2) -> Integer.compare(o1.getCalculatedDepth(), o2.getCalculatedDepth()));
 
+                // 1. Render all sprite image bodies
                 for (OverlayObject obj : sortedOverlays) {
-                    // Draw Multi-Waypoint Motion Vectors & Draggable Pins
-                    if (obj.useWalkPath && (chkShowWaypoints == null || chkShowWaypoints.isSelected()) && obj.waypoints.size() >= 2) {
-                        for (int w = 0; w < obj.waypoints.size() - 1; w++) {
-                            Waypoint pA = obj.waypoints.get(w);
-                            Waypoint pB = obj.waypoints.get(w + 1);
-                            int ax = toScreenX(pA.x);
-                            int ay = toScreenY(pA.y);
-                            int bx = toScreenX(pB.x);
-                            int by = toScreenY(pB.y);
-
-                            float[] pathDash = { 6.0f, 4.0f };
-                            g2.setColor(new Color(255, 170, 0, 220));
-                            g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, pathDash, 0.0f));
-                            g2.drawLine(ax, ay, bx, by);
-                        }
-
-                        // Draw Draggable Waypoint Pins (Point A, B, C...)
-                        for (int w = 0; w < obj.waypoints.size(); w++) {
-                            Waypoint wp = obj.waypoints.get(w);
-                            int px = toScreenX(wp.x);
-                            int py = toScreenY(wp.y);
-
-                            Color pinColor = (w == 0) ? new Color(85, 215, 105) : ((w == obj.waypoints.size() - 1) ? new Color(255, 60, 60) : new Color(0, 180, 255));
-                            g2.setColor(pinColor);
-                            g2.fillOval(px - 7, py - 7, 14, 14);
-                            g2.setColor(Color.WHITE);
-                            g2.setStroke(new BasicStroke(1.5f));
-                            g2.drawOval(px - 7, py - 7, 14, 14);
-
-                            g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
-                            String pinTag = wp.label;
-                            FontMetrics pfm = g2.getFontMetrics();
-                            int ptw = pfm.stringWidth(pinTag) + 6;
-                            g2.setColor(new Color(15, 20, 25, 220));
-                            g2.fillRoundRect(px - ptw / 2, py - 24, ptw, 16, 4, 4);
-                            g2.setColor(pinColor);
-                            g2.drawRoundRect(px - ptw / 2, py - 24, ptw, 16, 4, 4);
-                            g2.drawString(pinTag, px - ptw / 2 + 3, py - 12);
-                        }
-                    }
-
-                    // Render Sprite Image Frame
                     BufferedImage frameImg = obj.getCurrentFrame();
                     if (frameImg == null) frameImg = obj.fullImage;
                     if (frameImg != null) {
@@ -4571,30 +4635,121 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.drawLine(ax - 7, ay, ax + 7, ay);
                             g2.drawLine(ax, ay - 7, ax, ay + 7);
                             g2.drawOval(ax - 4, ay - 4, 8, 8);
-
-                            String tag = String.format(" %s [X: %d, Y: %d | Scale: %d%%] ",
-                                    obj.imageId, obj.getAnchorX(), obj.getAnchorY(), obj.scale);
-                            g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
-                            FontMetrics fm = g2.getFontMetrics();
-                            int tw = fm.stringWidth(tag) + 10;
-                            int th = 20;
-
-                            int tx = sx + obj.labelOffsetX;
-                            int ty = sy + obj.labelOffsetY;
-
-                            if (obj.customLabelPos && (Math.abs(obj.labelOffsetX) > 20 || Math.abs(obj.labelOffsetY + 24) > 20)) {
-                                g2.setColor(new Color(0, 230, 255, 160));
-                                g2.setStroke(new BasicStroke(1.2f));
-                                g2.drawLine(tx + tw / 2, ty + th / 2, sx + sw / 2, sy + sh / 2);
-                            }
-
-                            g2.setColor(new Color(0, 30, 60, 240));
-                            g2.fillRoundRect(tx, ty, tw, th, 6, 6);
-                            g2.setColor(new Color(0, 230, 255));
-                            g2.drawRoundRect(tx, ty, tw, th, 6, 6);
-                            g2.drawString(tag, tx + 4, ty + 14);
                         }
                     }
+                }
+
+                // 2. Render Multi-Waypoint Paths & High-Visibility Pins on top of all sprites
+                for (OverlayObject obj : sortedOverlays) {
+                    if (obj.useWalkPath && (chkShowWaypoints == null || chkShowWaypoints.isSelected()) && obj.waypoints.size() >= 2) {
+                        for (int w = 0; w < obj.waypoints.size() - 1; w++) {
+                            Waypoint pA = obj.waypoints.get(w);
+                            Waypoint pB = obj.waypoints.get(w + 1);
+                            int ax = toScreenX(pA.x);
+                            int ay = toScreenY(pA.y);
+                            int bx = toScreenX(pB.x);
+                            int by = toScreenY(pB.y);
+
+                            float[] pathDash = { 6.0f, 4.0f };
+                            g2.setColor(new Color(255, 180, 0, 230));
+                            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, pathDash, 0.0f));
+                            g2.drawLine(ax, ay, bx, by);
+                        }
+
+                        // Draw Draggable Waypoint Pins (Point A, B, C...) with glowing halos
+                        for (int w = 0; w < obj.waypoints.size(); w++) {
+                            Waypoint wp = obj.waypoints.get(w);
+                            int px = toScreenX(wp.x);
+                            int py = toScreenY(wp.y);
+
+                            boolean isPtB = (w == 1 || w == obj.waypoints.size() - 1);
+                            Color pinColor = (w == 0) ? new Color(85, 215, 105) : (isPtB ? new Color(255, 60, 60) : new Color(0, 180, 255));
+
+                            // Glowing halo around Point B so it's always super clear and never lost
+                            if (isPtB) {
+                                g2.setColor(new Color(255, 60, 60, 70));
+                                g2.fillOval(px - 14, py - 14, 28, 28);
+                                g2.setColor(new Color(255, 220, 0, 140));
+                                g2.setStroke(new BasicStroke(1.5f));
+                                g2.drawOval(px - 14, py - 14, 28, 28);
+                            }
+
+                            g2.setColor(pinColor);
+                            g2.fillOval(px - 8, py - 8, 16, 16);
+                            g2.setColor(Color.WHITE);
+                            g2.setStroke(new BasicStroke(2.0f));
+                            g2.drawOval(px - 8, py - 8, 16, 16);
+
+                            g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                            String pinTag = wp.label + (isPtB ? " (Target)" : "");
+                            FontMetrics pfm = g2.getFontMetrics();
+                            int ptw = pfm.stringWidth(pinTag) + 8;
+
+                            int clampedPinTagX = Math.max(currentOffsetX + 4, Math.min(currentOffsetX + drawW - ptw - 4, px - ptw / 2));
+                            int clampedPinTagY = Math.max(currentOffsetY + 4, Math.min(currentOffsetY + drawH - 22, py - 26));
+
+                            g2.setColor(new Color(15, 20, 25, 230));
+                            g2.fillRoundRect(clampedPinTagX, clampedPinTagY, ptw, 18, 6, 6);
+                            g2.setColor(pinColor);
+                            g2.drawRoundRect(clampedPinTagX, clampedPinTagY, ptw, 18, 6, 6);
+                            g2.setColor(Color.WHITE);
+                            g2.drawString(pinTag, clampedPinTagX + 4, clampedPinTagY + 13);
+                        }
+                    }
+                }
+
+                // 3. Render Active Character Blue Label Badge on TOPMOST FOREGROUND layer
+                if (activeOverlayObject != null) {
+                    OverlayObject obj = activeOverlayObject;
+                    int sx = toScreenX(obj.x);
+                    int sy = toScreenY(obj.y);
+                    int sw = (int) Math.round(obj.getDisplayWidth() * currentScale);
+                    int sh = (int) Math.round(obj.getDisplayHeight() * currentScale);
+                    int ax = toScreenX(obj.getAnchorX());
+                    int ay = toScreenY(obj.getAnchorY());
+
+                    String tag = String.format(" %s [X: %d, Y: %d | Scale: %d%%] ",
+                            obj.imageId, obj.getAnchorX(), obj.getAnchorY(), obj.scale);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                    FontMetrics fm = g2.getFontMetrics();
+                    int tw = fm.stringWidth(tag) + 12;
+                    int th = 22;
+
+                    int rawTx = sx + (sw - tw) / 2;
+                    int rawTy = sy - th - 6;
+                    if (rawTy < currentOffsetY + 8) {
+                        rawTy = sy + sh + 6;
+                    }
+
+                    // STRICT BOUNDARY CLAMPING: Blue label NEVER gets obscured or pushed offscreen
+                    int minTx = currentOffsetX + 6;
+                    int maxTx = currentOffsetX + drawW - tw - 6;
+                    int minTy = currentOffsetY + 6;
+                    int maxTy = currentOffsetY + drawH - th - 6;
+
+                    int tx = Math.max(minTx, Math.min(maxTx, rawTx));
+                    int ty = Math.max(minTy, Math.min(maxTy, rawTy));
+
+                    lastRenderedTagX = tx;
+                    lastRenderedTagY = ty;
+                    lastRenderedTagW = tw;
+                    lastRenderedTagH = th;
+
+                    // Draw glowing tether line connecting badge to character anchor point
+                    int clampedAx = Math.max(currentOffsetX + 4, Math.min(currentOffsetX + drawW - 4, ax));
+                    int clampedAy = Math.max(currentOffsetY + 4, Math.min(currentOffsetY + drawH - 4, ay));
+                    g2.setColor(new Color(0, 230, 255, 180));
+                    g2.setStroke(new BasicStroke(1.6f));
+                    g2.drawLine(tx + tw / 2, ty + th / 2, clampedAx, clampedAy);
+
+                    // Draw Blue Badge
+                    g2.setColor(new Color(5, 30, 75, 245));
+                    g2.fillRoundRect(tx, ty, tw, th, 8, 8);
+                    g2.setColor(new Color(0, 220, 255));
+                    g2.setStroke(new BasicStroke(1.8f));
+                    g2.drawRoundRect(tx, ty, tw, th, 8, 8);
+                    g2.setColor(Color.WHITE);
+                    g2.drawString(tag, tx + 6, ty + 15);
                 }
             }
 
