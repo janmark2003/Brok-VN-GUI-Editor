@@ -1545,49 +1545,46 @@ public class BrokVnClickAreaWindow extends JFrame {
                 BorderFactory.createMatteBorder(1, 0, 0, 0, cBorder),
                 BorderFactory.createEmptyBorder(5, 12, 5, 12)));
 
-        JPanel row1 = new JPanel(new BorderLayout(12, 0));
+        JPanel row1 = new JPanel(new BorderLayout(10, 0));
         row1.setOpaque(false);
 
         lblImageStatus = new JLabel("Engine Canvas: 1920x1080 | [No Image Loaded]");
         lblImageStatus.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        lblImageStatus.setForeground(cFgSubdued);
+        lblImageStatus.setForeground(new Color(0, 195, 255));
 
         lblCursorPos = new JLabel("Cursor: [ X: - , Y: - ]");
         lblCursorPos.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblCursorPos.setForeground(cFg);
 
-        row1.add(lblImageStatus, BorderLayout.WEST);
+        row1.add(lblImageStatus, BorderLayout.CENTER);
         row1.add(lblCursorPos, BorderLayout.EAST);
 
-        JPanel row2 = new JPanel(new BorderLayout(12, 0));
+        JPanel row2 = new JPanel(new BorderLayout(10, 0));
         row2.setOpaque(false);
 
-        lblCurrentBounds = new JLabel("Clicker: [100, 100] -> [500, 400] (400 x 300 px)");
-        lblCurrentBounds.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblCurrentBounds = new JLabel("Clicker: [No Area Drawn]");
+        lblCurrentBounds.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblCurrentBounds.setForeground(new Color(255, 215, 0)); // Gold
-        row2.add(lblCurrentBounds, BorderLayout.WEST);
+        row2.add(lblCurrentBounds, BorderLayout.CENTER);
 
         JPanel zoomPnl = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         zoomPnl.setOpaque(false);
 
-        JLabel lblZoomTips = new JLabel("(Scroll: Zoom | Middle/Left-Drag: Pan)");
-        lblZoomTips.setFont(new Font("Segoe UI", Font.ITALIC, 11));
-        lblZoomTips.setForeground(cFgSubdued);
-        zoomPnl.add(lblZoomTips);
-        zoomPnl.add(Box.createHorizontalStrut(6));
-
         JButton btnZoomOut = new JButton(" - ");
         styleStandardButton(btnZoomOut);
+        btnZoomOut.setPreferredSize(new Dimension(32, 22));
         btnZoomOut.setToolTipText("Zoom Out (Scroll Down or Ctrl+Minus)");
         btnZoomOut.addActionListener(e -> { if (canvas != null) canvas.zoomOut(); });
 
         JButton btnZoomIn = new JButton(" + ");
         styleStandardButton(btnZoomIn);
+        btnZoomIn.setPreferredSize(new Dimension(32, 22));
         btnZoomIn.setToolTipText("Zoom In (Scroll Up or Ctrl+Plus)");
         btnZoomIn.addActionListener(e -> { if (canvas != null) canvas.zoomIn(); });
 
-        JButton btnZoomReset = new JButton("100% / Reset View");
+        JButton btnZoomReset = new JButton("100% / Reset");
         styleStandardButton(btnZoomReset);
+        btnZoomReset.setPreferredSize(new Dimension(96, 22));
         btnZoomReset.setToolTipText("Reset Zoom to 100% and Center Canvas (Double Click or Ctrl+0)");
         btnZoomReset.addActionListener(e -> { if (canvas != null) canvas.resetZoomAndPan(); });
 
@@ -5315,14 +5312,21 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (lblCurrentBounds == null) return;
         int w = curX2 - curX1;
         int h = curY2 - curY1;
-        String clickerPart = String.format("Clicker: [%d, %d] -> [%d, %d] (%dx%d px)", curX1, curY1, curX2, curY2, w, h);
+        String clickerPart = hasActiveClicker
+                ? String.format("Clicker: [%d, %d] -> [%d, %d] (%dx%d px)", curX1, curY1, curX2, curY2, w, h)
+                : "Clicker: [No Area Drawn]";
+
         if (activeOverlayObject != null) {
-            String imgPart = String.format("'%s': [Anchor X: %d, Y: %d | Scale: %d%% | Depth: %d]",
+            String imgPart = String.format("Sprite '%s': [Anchor: %d, %d | Scale: %d%% | Depth: %d]",
                     activeOverlayObject.imageId, activeOverlayObject.getAnchorX(), activeOverlayObject.getAnchorY(),
                     activeOverlayObject.scale, activeOverlayObject.getCalculatedDepth());
-            lblCurrentBounds.setText(clickerPart + "  |  " + imgPart);
+            if (activeEditTarget == ActiveEditTarget.IMAGE) {
+                lblCurrentBounds.setText("<html><font color='#00C3FF'><b>" + imgPart + "</b></font> &nbsp;&bull;&nbsp; <font color='#FFD700'>" + clickerPart + "</font></html>");
+            } else {
+                lblCurrentBounds.setText("<html><font color='#FFD700'><b>" + clickerPart + "</b></font> &nbsp;&bull;&nbsp; <font color='#00C3FF'>" + imgPart + "</font></html>");
+            }
         } else {
-            lblCurrentBounds.setText(clickerPart);
+            lblCurrentBounds.setText("<html><font color='#FFD700'><b>" + clickerPart + "</b></font></html>");
         }
     }
 
