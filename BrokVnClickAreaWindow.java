@@ -89,16 +89,34 @@ public class BrokVnClickAreaWindow extends JFrame {
         public boolean visible = true; // Visibility in Editor & Canvas
         public Color color = new Color(0, 180, 255);
 
+        // IMAGEMODEL and TEXTMODEL support
+        public boolean useImageModel = false;
+        public String imageModel = "";
+        public boolean useTextModel = false;
+        public String textModel = "";
+        public boolean precise = true;
+
         public String toBrokVnScript() {
             StringBuilder sb = new StringBuilder();
             sb.append("#----------------------------------------------------\n");
             sb.append("# CLICKER: ").append(id).append("\n");
             sb.append("#----------------------------------------------------\n");
             sb.append("CLICKERNEW=").append(id).append("\n");
-            sb.append("\tX1=").append(x1).append("\n");
-            sb.append("\tY1=").append(y1).append("\n");
-            sb.append("\tX2=").append(x2).append("\n");
-            sb.append("\tY2=").append(y2).append("\n");
+
+            if (useImageModel && imageModel != null && !imageModel.trim().isEmpty()) {
+                sb.append("\tIMAGEMODEL=").append(imageModel.trim()).append("\n");
+                if (precise) {
+                    sb.append("\tPRECISE=1\n");
+                }
+            } else if (useTextModel && textModel != null && !textModel.trim().isEmpty()) {
+                sb.append("\tTEXTMODEL=").append(textModel.trim()).append("\n");
+            } else {
+                sb.append("\tX1=").append(x1).append("\n");
+                sb.append("\tY1=").append(y1).append("\n");
+                sb.append("\tX2=").append(x2).append("\n");
+                sb.append("\tY2=").append(y2).append("\n");
+            }
+
             if (layer > 0) {
                 sb.append("\tLAYER=").append(layer).append("\n");
             }
@@ -134,6 +152,134 @@ public class BrokVnClickAreaWindow extends JFrame {
             sb.append("\t# Add scene actions / dialogue call here\n");
 
             return sb.toString();
+        }
+    }
+
+    // Data model for Onscreen Scene Text (TEXTNEW + optional TEXTMODEL Clicker)
+    public static class TextObject {
+        public String id = "MY_TEXT_ID";
+        public String text = "Hello World!";
+        public int x = 960;
+        public int y = 540;
+        public String font = "FONT_DEFAULT";
+        public String color1 = "c_white";
+        public String alignH = "CENTER"; // "CENTER", "LEFT", "RIGHT"
+        public int depth = 1;
+        public boolean visible = true;
+
+        // Clickable Text Model (TEXTMODEL)
+        public boolean isTextModelClicker = false;
+        public String clickerId = "CLICK_TEXT";
+        public boolean clickerHighlight = true;
+        public String clickerHoverText = "";
+        public String clickEvent = "S01_TEXT_CLICKED";
+        public int clickerLayer = 0;
+
+        public TextObject(String id, String text, int x, int y) {
+            this.id = id;
+            this.text = text;
+            this.x = x;
+            this.y = y;
+            this.clickerId = "CLICK_" + id;
+            this.clickEvent = "S01_" + id + "_CLICKED";
+        }
+
+        public Color getAwtColor() {
+            if (color1 == null) return Color.WHITE;
+            switch (color1.toLowerCase().trim()) {
+                case "c_yellow": return new Color(255, 230, 80);
+                case "c_black": return Color.BLACK;
+                case "c_red": return new Color(255, 70, 70);
+                case "c_green": return new Color(80, 230, 100);
+                case "c_cyan": return new Color(70, 220, 255);
+                case "c_orange": return new Color(255, 160, 50);
+                case "c_blue": return new Color(80, 150, 255);
+                case "c_purple": return new Color(200, 100, 255);
+                case "c_gray": return Color.GRAY;
+                case "c_white":
+                default:
+                    return Color.WHITE;
+            }
+        }
+
+        public String toTextNewScript() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("#----------------------------------------------------\n");
+            sb.append("# ONSCREEN TEXT PLACEMENT: ").append(id).append("\n");
+            sb.append("#----------------------------------------------------\n");
+            sb.append("EVENT=S01_SHOW_").append(id).append("\n");
+            sb.append("\tTEXTNEW=").append(id).append("\n");
+            sb.append("\t\tTEXT=").append(text != null ? text : "").append("\n");
+            sb.append("\t\tX=").append(x).append("\n");
+            sb.append("\t\tY=").append(y).append("\n");
+            if (font != null && !font.trim().isEmpty()) {
+                sb.append("\t\tFONT=").append(font.trim().toUpperCase()).append("\n");
+            }
+            if (color1 != null && !color1.trim().isEmpty()) {
+                sb.append("\t\tCOLOR1=").append(color1.trim().toLowerCase()).append("\n");
+            }
+            if (alignH != null && !alignH.trim().isEmpty()) {
+                sb.append("\t\tALIGNH=").append(alignH.trim().toUpperCase()).append("\n");
+            }
+            if (depth != 0) {
+                sb.append("\t\tDEPTH=").append(depth).append("\n");
+            }
+
+            if (isTextModelClicker) {
+                sb.append("\n").append(toTextModelClickerScript());
+            }
+
+            return sb.toString();
+        }
+
+        public String toTextModelClickerScript() {
+            StringBuilder sb = new StringBuilder();
+            String cid = (clickerId != null && !clickerId.trim().isEmpty()) ? clickerId.trim() : "CLICK_" + id;
+            sb.append("#----------------------------------------------------\n");
+            sb.append("# ATTACHED TEXT MODEL CLICKER: ").append(cid).append("\n");
+            sb.append("#----------------------------------------------------\n");
+            sb.append("CLICKERNEW=").append(cid).append("\n");
+            sb.append("\tTEXTMODEL=").append(id).append("\n");
+            if (clickerHighlight) {
+                sb.append("\tHIGHLIGHT=1\n");
+            }
+            if (clickerHoverText != null && !clickerHoverText.trim().isEmpty()) {
+                sb.append("\tTEXT=").append(clickerHoverText.trim()).append("\n");
+            }
+            if (clickerLayer > 0) {
+                sb.append("\tLAYER=").append(clickerLayer).append("\n");
+            }
+            String cev = (clickEvent != null && !clickEvent.trim().isEmpty()) ? clickEvent.trim() : "S01_" + id + "_CLICKED";
+            sb.append("\tCLICKEVENT=").append(cev).append("\n");
+            return sb.toString();
+        }
+
+        public boolean contains(int engX, int engY) {
+            int strLen = (text != null && !text.isEmpty()) ? text.length() : id.length();
+            int estW = Math.max(60, strLen * 12);
+            int estH = 28;
+            int left = x;
+            if ("CENTER".equalsIgnoreCase(alignH)) {
+                left = x - estW / 2;
+            } else if ("RIGHT".equalsIgnoreCase(alignH)) {
+                left = x - estW;
+            }
+            int top = y - estH + 6;
+            return engX >= left - 12 && engX <= left + estW + 12 && engY >= top - 8 && engY <= top + estH + 8;
+        }
+
+        public Rectangle getBounds(FontMetrics fm) {
+            String str = (text != null && !text.isEmpty()) ? text : id;
+            int w = (fm != null) ? fm.stringWidth(str) : str.length() * 12;
+            int h = (fm != null) ? fm.getHeight() : 24;
+            int left = x;
+            if ("CENTER".equalsIgnoreCase(alignH)) {
+                left = x - w / 2;
+            } else if ("RIGHT".equalsIgnoreCase(alignH)) {
+                left = x - w;
+            }
+            int top = y - (fm != null ? fm.getAscent() : 18);
+            return new Rectangle(left, top, w, h);
         }
     }
 
@@ -185,6 +331,14 @@ public class BrokVnClickAreaWindow extends JFrame {
         public int currentWaypointSegment = 0; // Index of active path segment
         public double currentWalkProgress = 0.0; // 0.0 to 1.0 along current segment
         public boolean walkForward = true;
+
+        // --- ImageModel Clicker Support (Asset becomes a clicker) ---
+        public boolean isImageModelClicker = false;
+        public String clickerId = ""; // e.g. "CLICK_" + imageId or "SELECTOR_ARROW"
+        public boolean precise = true; // PRECISE=1 (pixel-perfect collision)
+        public String clickEvent = ""; // e.g. "S00_CHAPTER_NEXT"
+        public String clickerText = ""; // optional hover/text
+        public int clickerLayer = 0;
 
         // Draggable Character Label Badge offset
         public boolean customLabelPos = false;
@@ -459,8 +613,27 @@ public class BrokVnClickAreaWindow extends JFrame {
                     String nextEv = (i < waypoints.size() - 1)
                             ? "S01_" + imageId + "_PATH_" + (i + 1)
                             : ((wpCurr.endEvent != null && !wpCurr.endEvent.trim().isEmpty()) ? wpCurr.endEvent.trim() : "S01_" + imageId + "_ARRIVED");
-                    sb.append("\t\tENDEVENT=").append(nextEv).append("\n\n");
                 }
+            }
+
+            if (isImageModelClicker) {
+                String cid = (clickerId != null && !clickerId.trim().isEmpty()) ? clickerId.trim() : "CLICK_" + imageId;
+                String cev = (clickEvent != null && !clickEvent.trim().isEmpty()) ? clickEvent.trim() : "S01_" + imageId + "_CLICKED";
+                sb.append("#----------------------------------------------------\n");
+                sb.append("# ATTACHED IMAGE MODEL CLICKER: ").append(cid).append("\n");
+                sb.append("#----------------------------------------------------\n");
+                sb.append("CLICKERNEW=").append(cid).append("\n");
+                sb.append("\tIMAGEMODEL=").append(imageId).append("\n");
+                if (precise) {
+                    sb.append("\tPRECISE=1\n");
+                }
+                if (clickerLayer > 0) {
+                    sb.append("\tLAYER=").append(clickerLayer).append("\n");
+                }
+                if (clickerText != null && !clickerText.trim().isEmpty()) {
+                    sb.append("\tTEXT=").append(clickerText.trim()).append("\n");
+                }
+                sb.append("\tCLICKEVENT=").append(cev).append("\n\n");
             }
 
             return sb.toString();
@@ -469,7 +642,8 @@ public class BrokVnClickAreaWindow extends JFrame {
 
     public enum ActiveEditTarget {
         CLICKER,
-        IMAGE
+        IMAGE,
+        TEXT
     }
 
     private enum DragHandleType {
@@ -477,7 +651,8 @@ public class BrokVnClickAreaWindow extends JFrame {
         OVERLAY_SPRITE,
         OVERLAY_LABEL,
         WAYPOINT_PIN,
-        CLICKER_BOX
+        CLICKER_BOX,
+        TEXT_OBJECT
     }
 
     // =========================================================================
@@ -499,6 +674,13 @@ public class BrokVnClickAreaWindow extends JFrame {
     // Character & Object Overlays (IMAGENEW + IMAGEMOVE)
     private final List<OverlayObject> overlayObjects = new ArrayList<>();
     private OverlayObject activeOverlayObject = null;
+
+    // Onscreen Scene Texts (TEXTNEW)
+    private final List<TextObject> textObjects = new ArrayList<>();
+    private TextObject activeTextObject = null;
+    private int textDragOffsetX = 0;
+    private int textDragOffsetY = 0;
+
     private ActiveEditTarget activeEditTarget = ActiveEditTarget.CLICKER;
 
     // Canvas Dragging State
@@ -534,6 +716,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     // Active Target Toggles
     private JToggleButton btnTargetClicker;
     private JToggleButton btnTargetImage;
+    private JToggleButton btnTargetText;
 
     // Image (IMAGENEW) Parameter UI
     private JTextField txtImageId;
@@ -547,6 +730,32 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JSpinner spImageScale;
     private JSlider sldImageScale;
     private JCheckBox chkFlipH;
+
+    // ImageModel Clicker UI (inside Sprite Tab)
+    private JCheckBox chkImgIsClicker;
+    private JTextField txtImgClickerId;
+    private JTextField txtImgClickEvent;
+    private JCheckBox chkImgPrecise;
+    private JTextField txtImgClickerText;
+    private JSpinner spImgClickerLayer;
+
+    // Text (TEXTNEW) Parameter UI
+    private JTextField txtTextId;
+    private JTextField txtTextContent;
+    private JSpinner spTextX, spTextY;
+    private JComboBox<String> cmbTextFont;
+    private JComboBox<String> cmbTextColor;
+    private JComboBox<String> cmbTextAlignH;
+    private JSpinner spTextDepth;
+    private boolean updatingTextSpinners = false;
+
+    // TextModel Clicker UI (inside Text Tab)
+    private JCheckBox chkTextIsClicker;
+    private JTextField txtTextClickerId;
+    private JTextField txtTextClickerHover;
+    private JTextField txtTextClickEvent;
+    private JCheckBox chkTextClickerHighlight;
+    private JSpinner spTextClickerLayer;
 
     // Spritesheet & Animation Controls
     private JCheckBox chkIsAnimation;
@@ -576,6 +785,11 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JComboBox<String> cmbType;
     private JComboBox<String> cmbStayActive;
     private JCheckBox chkSyncClickerWithImage;
+    private JCheckBox chkUseImageModel;
+    private JComboBox<String> cmbImageModelSprite;
+    private JCheckBox chkUseTextModel;
+    private JComboBox<String> cmbTextModelText;
+    private JCheckBox chkPrecise;
 
     // Layer Management
     private DefaultTableModel layerTableModel;
@@ -1061,14 +1275,18 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         btnTargetClicker = new JToggleButton("Edit Clicker (CLICKERNEW)", true);
         btnTargetImage = new JToggleButton("Edit Sprite (IMAGENEW)", false);
+        btnTargetText = new JToggleButton("Edit Text (TEXTNEW)", false);
         styleToggleButton(btnTargetClicker);
         styleToggleButton(btnTargetImage);
+        styleToggleButton(btnTargetText);
         btnTargetClicker.setToolTipText("Interactive mode: Dragging sets CLICKERNEW coordinates (X1, Y1, X2, Y2)");
         btnTargetImage.setToolTipText("Interactive mode: Dragging moves placed IMAGENEW sprite position (X, Y)");
+        btnTargetText.setToolTipText("Interactive mode: Dragging moves placed TEXTNEW onscreen text position (X, Y)");
 
         ButtonGroup editGroup = new ButtonGroup();
         editGroup.add(btnTargetClicker);
         editGroup.add(btnTargetImage);
+        editGroup.add(btnTargetText);
 
         btnTargetClicker.addActionListener(e -> {
             activeEditTarget = ActiveEditTarget.CLICKER;
@@ -1082,6 +1300,16 @@ public class BrokVnClickAreaWindow extends JFrame {
             activeEditTarget = ActiveEditTarget.IMAGE;
             if (rightTabbedPane != null)
                 rightTabbedPane.setSelectedIndex(1);
+            syncImageUiFromActiveObject();
+            if (canvas != null)
+                canvas.repaint();
+        });
+
+        btnTargetText.addActionListener(e -> {
+            activeEditTarget = ActiveEditTarget.TEXT;
+            if (rightTabbedPane != null)
+                rightTabbedPane.setSelectedIndex(2);
+            syncTextUiFromActiveObject();
             if (canvas != null)
                 canvas.repaint();
         });
@@ -1094,6 +1322,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         row2Left.add(lblToolMode);
         row2Left.add(btnTargetClicker);
         row2Left.add(btnTargetImage);
+        row2Left.add(btnTargetText);
         row2Left.add(Box.createHorizontalStrut(6));
         row2Left.add(btnBringPointBToolbar);
 
@@ -1303,15 +1532,19 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel tabImage = buildImagePanel();
         rightTabbedPane.addTab("Sprite / Character", tabImage);
 
-        // TAB 3: Layer Management & Visibility
+        // TAB 3: Onscreen Scene Text (TEXTNEW)
+        JPanel tabText = buildTextPanel();
+        rightTabbedPane.addTab("Text (TEXTNEW)", tabText);
+
+        // TAB 4: Layer Management & Visibility
         JPanel tabLayers = buildLayersPanel();
         rightTabbedPane.addTab("Layers", tabLayers);
 
-        // TAB 4: Clickers List & Scene Batch Exporter
+        // TAB 5: Clickers List & Scene Batch Exporter
         JPanel tabList = buildListPanel();
         rightTabbedPane.addTab("Clickers List (" + savedClickers.size() + ")", tabList);
 
-        // TAB 5: Overall BrokVN File (3rd Side Full Script)
+        // TAB 6: Overall BrokVN File (3rd Side Full Script)
         JPanel tabOverall = buildOverallBrokVnFilePanel();
         rightTabbedPane.addTab("Overall BrokVN File", tabOverall);
 
@@ -1327,8 +1560,13 @@ public class BrokVnClickAreaWindow extends JFrame {
                     btnTargetImage.setSelected(true);
                 syncImageUiFromActiveObject();
             } else if (idx == 2) {
+                activeEditTarget = ActiveEditTarget.TEXT;
+                if (btnTargetText != null)
+                    btnTargetText.setSelected(true);
+                syncTextUiFromActiveObject();
+            } else if (idx == 3) {
                 refreshLayerTable();
-            } else if (idx == 4) {
+            } else if (idx == 5) {
                 updateOverallBrokVnFile();
             }
             if (canvas != null)
@@ -1348,8 +1586,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         lblMode.setFont(new Font("Segoe UI", Font.BOLD, 11));
 
         cmbScriptGenMode = new JComboBox<>(new String[] {
-                "Combined (IMAGENEW + IMAGEMOVE + CLICKERNEW)",
+                "Combined (IMAGENEW + TEXTNEW + CLICKERNEW)",
                 "New Item Sprite (IMAGENEW Only)",
+                "Scene Text (TEXTNEW Only)",
                 "Walk Path Movement (IMAGEMOVE Only)",
                 "Click Area Hotspot (CLICKERNEW Only)"
         });
@@ -1612,7 +1851,60 @@ public class BrokVnClickAreaWindow extends JFrame {
         flagsPanel.add(chkCanDpad);
         propPanel.add(flagsPanel, gbc);
 
+        // Model Linking Box (IMAGEMODEL or TEXTMODEL)
+        JPanel modelBox = new JPanel(new GridBagLayout());
+        modelBox.setBackground(cPanelBg);
+        styleTitledBorder(modelBox, "Link to Sprite or Text Model (IMAGEMODEL / TEXTMODEL)");
+
+        GridBagConstraints mgbc = new GridBagConstraints();
+        mgbc.insets = new Insets(3, 4, 3, 4);
+        mgbc.fill = GridBagConstraints.HORIZONTAL;
+
+        chkUseImageModel = new JCheckBox("Use Sprite Model (IMAGEMODEL)", false);
+        styleCheckBox(chkUseImageModel);
+        cmbImageModelSprite = new JComboBox<>();
+        styleComboBox(cmbImageModelSprite);
+        chkPrecise = new JCheckBox("PRECISE=1 (Pixel-Perfect Hitbox)", true);
+        styleCheckBox(chkPrecise);
+
+        chkUseTextModel = new JCheckBox("Use Text Model (TEXTMODEL)", false);
+        styleCheckBox(chkUseTextModel);
+        cmbTextModelText = new JComboBox<>();
+        styleComboBox(cmbTextModelText);
+
+        chkUseImageModel.addActionListener(e -> {
+            if (chkUseImageModel.isSelected()) {
+                chkUseTextModel.setSelected(false);
+            }
+            updateScriptPreview();
+        });
+        chkUseTextModel.addActionListener(e -> {
+            if (chkUseTextModel.isSelected()) {
+                chkUseImageModel.setSelected(false);
+            }
+            updateScriptPreview();
+        });
+        cmbImageModelSprite.addItemListener(itemListener);
+        cmbTextModelText.addItemListener(itemListener);
+        chkPrecise.addActionListener(e -> updateScriptPreview());
+
+        mgbc.gridx = 0; mgbc.gridy = 0; mgbc.weightx = 0.45;
+        modelBox.add(chkUseImageModel, mgbc);
+        mgbc.gridx = 1; mgbc.gridy = 0; mgbc.weightx = 0.55;
+        modelBox.add(cmbImageModelSprite, mgbc);
+
+        mgbc.gridx = 0; mgbc.gridy = 1; mgbc.gridwidth = 2;
+        modelBox.add(chkPrecise, mgbc);
+        mgbc.gridwidth = 1;
+
+        mgbc.gridx = 0; mgbc.gridy = 2; mgbc.weightx = 0.45;
+        modelBox.add(chkUseTextModel, mgbc);
+        mgbc.gridx = 1; mgbc.gridy = 2; mgbc.weightx = 0.55;
+        modelBox.add(cmbTextModelText, mgbc);
+
         contentPanel.add(coordBox);
+        contentPanel.add(Box.createVerticalStrut(4));
+        contentPanel.add(modelBox);
         contentPanel.add(Box.createVerticalStrut(4));
         contentPanel.add(presetBar);
         contentPanel.add(Box.createVerticalStrut(4));
@@ -2054,7 +2346,71 @@ public class BrokVnClickAreaWindow extends JFrame {
         walkBox.add(walkPresetBar, wgbc);
         wgbc.gridwidth = 1;
 
-        // Card 4: Snap & Alignment Actions
+        // Card 4: Interactive Clicker (IMAGEMODEL Hotspot)
+        JPanel imgClickerBox = new JPanel(new GridBagLayout());
+        imgClickerBox.setBackground(cPanelBg);
+        styleTitledBorder(imgClickerBox, "Interactive Clicker (IMAGEMODEL Hotspot)");
+
+        GridBagConstraints icgbc = new GridBagConstraints();
+        icgbc.insets = new Insets(3, 4, 3, 4);
+        icgbc.fill = GridBagConstraints.HORIZONTAL;
+
+        chkImgIsClicker = new JCheckBox("Make Asset a Clicker (IMAGEMODEL)", false);
+        styleCheckBox(chkImgIsClicker);
+        chkImgIsClicker.addActionListener(e -> {
+            syncActiveObjectFromImageUi();
+            refreshLayerTable();
+        });
+
+        txtImgClickerId = new JTextField("SELECTOR_ARROW");
+        txtImgClickEvent = new JTextField("S00_CHAPTER_NEXT");
+        chkImgPrecise = new JCheckBox("PRECISE=1 (Pixel-Perfect Hitbox)", true);
+        txtImgClickerText = new JTextField("");
+        spImgClickerLayer = new JSpinner(new SpinnerNumberModel(0, 0, 50, 1));
+
+        styleTextField(txtImgClickerId);
+        styleTextField(txtImgClickEvent);
+        styleCheckBox(chkImgPrecise);
+        styleTextField(txtImgClickerText);
+        styleSpinner(spImgClickerLayer);
+
+        txtImgClickerId.addKeyListener(keySync);
+        txtImgClickEvent.addKeyListener(keySync);
+        txtImgClickerText.addKeyListener(keySync);
+        chkImgPrecise.addActionListener(e -> syncActiveObjectFromImageUi());
+        spImgClickerLayer.addChangeListener(imgSpinnerListener);
+
+        icgbc.gridx = 0; icgbc.gridy = 0; icgbc.gridwidth = 2;
+        imgClickerBox.add(chkImgIsClicker, icgbc);
+        icgbc.gridwidth = 1;
+
+        icgbc.gridx = 0; icgbc.gridy = 1; icgbc.weightx = 0.35;
+        imgClickerBox.add(createStyledLabel("Clicker ID (CLICKERNEW):"), icgbc);
+        icgbc.gridx = 1; icgbc.gridy = 1; icgbc.weightx = 0.65;
+        imgClickerBox.add(txtImgClickerId, icgbc);
+
+        icgbc.gridx = 0; icgbc.gridy = 2; icgbc.weightx = 0.35;
+        imgClickerBox.add(createStyledLabel("Event (CLICKEVENT):"), icgbc);
+        icgbc.gridx = 1; icgbc.gridy = 2; icgbc.weightx = 0.65;
+        imgClickerBox.add(txtImgClickEvent, icgbc);
+
+        icgbc.gridx = 0; icgbc.gridy = 3; icgbc.weightx = 0.35;
+        imgClickerBox.add(createStyledLabel("Hover Text (TEXT=):"), icgbc);
+        icgbc.gridx = 1; icgbc.gridy = 3; icgbc.weightx = 0.65;
+        imgClickerBox.add(txtImgClickerText, icgbc);
+
+        icgbc.gridx = 0; icgbc.gridy = 4; icgbc.weightx = 0.35;
+        imgClickerBox.add(createStyledLabel("Options:"), icgbc);
+        JPanel imgOptPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        imgOptPnl.setOpaque(false);
+        imgOptPnl.add(chkImgPrecise);
+        imgOptPnl.add(createStyledLabel("Layer:"));
+        spImgClickerLayer.setPreferredSize(new Dimension(50, 24));
+        imgOptPnl.add(spImgClickerLayer);
+        icgbc.gridx = 1; icgbc.gridy = 4; icgbc.weightx = 0.65;
+        imgClickerBox.add(imgOptPnl, icgbc);
+
+        // Card 5: Snap & Alignment Actions
         JPanel alignBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         alignBar.setBackground(cPanelBg);
 
@@ -2086,6 +2442,8 @@ public class BrokVnClickAreaWindow extends JFrame {
         contentPanel.add(Box.createVerticalStrut(4));
         contentPanel.add(walkBox);
         contentPanel.add(Box.createVerticalStrut(4));
+        contentPanel.add(imgClickerBox);
+        contentPanel.add(Box.createVerticalStrut(4));
         contentPanel.add(alignBar);
 
         JScrollPane scroll = new JScrollPane(contentPanel);
@@ -2097,6 +2455,328 @@ public class BrokVnClickAreaWindow extends JFrame {
         outer.setBackground(cPanelBg);
         outer.add(scroll, BorderLayout.CENTER);
         return outer;
+    }
+
+    private JPanel buildTextPanel() {
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setBackground(cPanelBg);
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+
+        // Top Actions Bar
+        JPanel actBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        actBar.setBackground(cPanelBg);
+
+        JButton btnAddText = new JButton("+ Add Text Object");
+        stylePrimaryButton(btnAddText, new Color(0, 155, 225));
+        btnAddText.addActionListener(e -> addNewTextObject());
+
+        JButton btnRemoveText = new JButton("- Remove Text");
+        styleStandardButton(btnRemoveText);
+        btnRemoveText.addActionListener(e -> removeActiveTextObject());
+
+        JButton btnCenterText = new JButton("Center Text");
+        styleStandardButton(btnCenterText);
+        btnCenterText.addActionListener(e -> centerActiveTextObject());
+
+        actBar.add(btnAddText);
+        actBar.add(btnRemoveText);
+        actBar.add(btnCenterText);
+
+        // Text Properties
+        JPanel propBox = new JPanel(new GridBagLayout());
+        propBox.setBackground(cPanelBg);
+        styleTitledBorder(propBox, "Onscreen Text Parameters (TEXTNEW)");
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(3, 4, 3, 4);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        txtTextId = new JTextField("MY_TEXT_ID");
+        txtTextContent = new JTextField("Hello World!");
+        spTextX = new JSpinner(new SpinnerNumberModel(960, -3000, 5000, 1));
+        spTextY = new JSpinner(new SpinnerNumberModel(540, -3000, 5000, 1));
+        spTextDepth = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
+
+        styleTextField(txtTextId);
+        styleTextField(txtTextContent);
+        styleSpinner(spTextX);
+        styleSpinner(spTextY);
+        styleSpinner(spTextDepth);
+
+        cmbTextFont = new JComboBox<>(new String[] {
+                "FONT_DEFAULT", "FONT_TITLE", "FONT_DIALOGUE", "FONT_UI", "FONT_SMALL", "FONT_LARGE", "FONT_NAME"
+        });
+        styleComboBox(cmbTextFont);
+
+        cmbTextColor = new JComboBox<>(new String[] {
+                "c_white", "c_yellow", "c_black", "c_red", "c_green", "c_cyan", "c_orange", "c_blue", "c_purple", "c_gray"
+        });
+        styleComboBox(cmbTextColor);
+
+        cmbTextAlignH = new JComboBox<>(new String[] { "CENTER", "LEFT", "RIGHT" });
+        styleComboBox(cmbTextAlignH);
+
+        KeyAdapter textKeyAdapter = new KeyAdapter() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                syncActiveTextFromUi();
+            }
+        };
+        txtTextId.addKeyListener(textKeyAdapter);
+        txtTextContent.addKeyListener(textKeyAdapter);
+
+        ChangeListener textSpinnerListener = e -> {
+            if (!updatingTextSpinners) {
+                syncActiveTextFromUi();
+            }
+        };
+        spTextX.addChangeListener(textSpinnerListener);
+        spTextY.addChangeListener(textSpinnerListener);
+        spTextDepth.addChangeListener(textSpinnerListener);
+
+        ItemListener textItemListener = e -> syncActiveTextFromUi();
+        cmbTextFont.addItemListener(textItemListener);
+        cmbTextColor.addItemListener(textItemListener);
+        cmbTextAlignH.addItemListener(textItemListener);
+
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Text ID (TEXTNEW):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 0.65;
+        propBox.add(txtTextId, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Content (TEXT):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 1; gbc.weightx = 0.65;
+        propBox.add(txtTextContent, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Position (X, Y):"), gbc);
+        JPanel posPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        posPnl.setOpaque(false);
+        posPnl.add(createStyledLabel("X:"));
+        spTextX.setPreferredSize(new Dimension(68, 24));
+        posPnl.add(spTextX);
+        posPnl.add(createStyledLabel("Y:"));
+        spTextY.setPreferredSize(new Dimension(68, 24));
+        posPnl.add(spTextY);
+        gbc.gridx = 1; gbc.gridy = 2; gbc.weightx = 0.65;
+        propBox.add(posPnl, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Font (FONT):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 3; gbc.weightx = 0.65;
+        propBox.add(cmbTextFont, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 4; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Color (COLOR1):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 4; gbc.weightx = 0.65;
+        propBox.add(cmbTextColor, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 5; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Align (ALIGNH):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 5; gbc.weightx = 0.65;
+        propBox.add(cmbTextAlignH, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 6; gbc.weightx = 0.35;
+        propBox.add(createStyledLabel("Depth (DEPTH):"), gbc);
+        gbc.gridx = 1; gbc.gridy = 6; gbc.weightx = 0.65;
+        spTextDepth.setPreferredSize(new Dimension(68, 24));
+        propBox.add(spTextDepth, gbc);
+
+        // Clickable Text Model Configuration Box (TEXTMODEL)
+        JPanel textModelBox = new JPanel(new GridBagLayout());
+        textModelBox.setBackground(cPanelBg);
+        styleTitledBorder(textModelBox, "Make Text Clickable (TEXTMODEL Hotspot)");
+
+        GridBagConstraints tgbc = new GridBagConstraints();
+        tgbc.insets = new Insets(3, 4, 3, 4);
+        tgbc.fill = GridBagConstraints.HORIZONTAL;
+
+        chkTextIsClicker = new JCheckBox("Enable Text as Clicker Hotspot", false);
+        styleCheckBox(chkTextIsClicker);
+        chkTextIsClicker.addActionListener(e -> {
+            syncActiveTextFromUi();
+            refreshLayerTable();
+        });
+
+        txtTextClickerId = new JTextField("CLICK_TEXT");
+        txtTextClickerHover = new JTextField("CRUCK CRUCK INNA MERST");
+        txtTextClickEvent = new JTextField("S01_TEXT_CLICKED");
+        chkTextClickerHighlight = new JCheckBox("HIGHLIGHT=1", true);
+        spTextClickerLayer = new JSpinner(new SpinnerNumberModel(0, 0, 50, 1));
+
+        styleTextField(txtTextClickerId);
+        styleTextField(txtTextClickerHover);
+        styleTextField(txtTextClickEvent);
+        styleCheckBox(chkTextClickerHighlight);
+        styleSpinner(spTextClickerLayer);
+
+        txtTextClickerId.addKeyListener(textKeyAdapter);
+        txtTextClickerHover.addKeyListener(textKeyAdapter);
+        txtTextClickEvent.addKeyListener(textKeyAdapter);
+        chkTextClickerHighlight.addActionListener(e -> syncActiveTextFromUi());
+        spTextClickerLayer.addChangeListener(textSpinnerListener);
+
+        tgbc.gridx = 0; tgbc.gridy = 0; tgbc.gridwidth = 2;
+        textModelBox.add(chkTextIsClicker, tgbc);
+        tgbc.gridwidth = 1;
+
+        tgbc.gridx = 0; tgbc.gridy = 1; tgbc.weightx = 0.35;
+        textModelBox.add(createStyledLabel("Clicker ID:"), tgbc);
+        tgbc.gridx = 1; tgbc.gridy = 1; tgbc.weightx = 0.65;
+        textModelBox.add(txtTextClickerId, tgbc);
+
+        tgbc.gridx = 0; tgbc.gridy = 2; tgbc.weightx = 0.35;
+        textModelBox.add(createStyledLabel("Hover Text (TEXT):"), tgbc);
+        tgbc.gridx = 1; tgbc.gridy = 2; tgbc.weightx = 0.65;
+        textModelBox.add(txtTextClickerHover, tgbc);
+
+        tgbc.gridx = 0; tgbc.gridy = 3; tgbc.weightx = 0.35;
+        textModelBox.add(createStyledLabel("Event (CLICKEVENT):"), tgbc);
+        tgbc.gridx = 1; tgbc.gridy = 3; tgbc.weightx = 0.65;
+        textModelBox.add(txtTextClickEvent, tgbc);
+
+        tgbc.gridx = 0; tgbc.gridy = 4; tgbc.weightx = 0.35;
+        textModelBox.add(createStyledLabel("Options:"), tgbc);
+        JPanel optPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        optPnl.setOpaque(false);
+        optPnl.add(chkTextClickerHighlight);
+        optPnl.add(createStyledLabel("Layer:"));
+        spTextClickerLayer.setPreferredSize(new Dimension(50, 24));
+        optPnl.add(spTextClickerLayer);
+        tgbc.gridx = 1; tgbc.gridy = 4; tgbc.weightx = 0.65;
+        textModelBox.add(optPnl, tgbc);
+
+        contentPanel.add(actBar);
+        contentPanel.add(Box.createVerticalStrut(4));
+        contentPanel.add(propBox);
+        contentPanel.add(Box.createVerticalStrut(4));
+        contentPanel.add(textModelBox);
+
+        JScrollPane scroll = new JScrollPane(contentPanel);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(cPanelBg);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        JPanel outer = new JPanel(new BorderLayout());
+        outer.setBackground(cPanelBg);
+        outer.add(scroll, BorderLayout.CENTER);
+        return outer;
+    }
+
+    private void addNewTextObject() {
+        String baseId = "TEXT_" + (textObjects.size() + 1);
+        TextObject obj = new TextObject(baseId, "Hello World!", 960, 540);
+        textObjects.add(obj);
+        activeTextObject = obj;
+        activeEditTarget = ActiveEditTarget.TEXT;
+        if (btnTargetText != null) btnTargetText.setSelected(true);
+        if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+        if (btnTargetImage != null) btnTargetImage.setSelected(false);
+        if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(2);
+        syncTextUiFromActiveObject();
+        refreshLayerTable();
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+    }
+
+    private void removeActiveTextObject() {
+        if (activeTextObject != null) {
+            textObjects.remove(activeTextObject);
+            activeTextObject = textObjects.isEmpty() ? null : textObjects.get(0);
+            syncTextUiFromActiveObject();
+            refreshLayerTable();
+            updateScriptPreview();
+            updateOverallBrokVnFile();
+            if (canvas != null) canvas.repaint();
+        }
+    }
+
+    private void centerActiveTextObject() {
+        if (activeTextObject != null) {
+            activeTextObject.x = 960;
+            activeTextObject.y = 540;
+            syncTextUiFromActiveObject();
+            updateScriptPreview();
+            updateOverallBrokVnFile();
+            if (canvas != null) canvas.repaint();
+        }
+    }
+
+    public void syncTextUiFromActiveObject() {
+        if (activeTextObject == null) {
+            if (txtTextId != null) txtTextId.setText("");
+            if (txtTextContent != null) txtTextContent.setText("");
+            return;
+        }
+        updatingTextSpinners = true;
+        if (txtTextId != null) txtTextId.setText(activeTextObject.id);
+        if (txtTextContent != null) txtTextContent.setText(activeTextObject.text);
+        if (spTextX != null) spTextX.setValue(activeTextObject.x);
+        if (spTextY != null) spTextY.setValue(activeTextObject.y);
+        if (cmbTextFont != null) cmbTextFont.setSelectedItem(activeTextObject.font);
+        if (cmbTextColor != null) cmbTextColor.setSelectedItem(activeTextObject.color1);
+        if (cmbTextAlignH != null) cmbTextAlignH.setSelectedItem(activeTextObject.alignH);
+        if (spTextDepth != null) spTextDepth.setValue(activeTextObject.depth);
+
+        if (chkTextIsClicker != null) chkTextIsClicker.setSelected(activeTextObject.isTextModelClicker);
+        if (txtTextClickerId != null) txtTextClickerId.setText(activeTextObject.clickerId != null ? activeTextObject.clickerId : "CLICK_" + activeTextObject.id);
+        if (txtTextClickerHover != null) txtTextClickerHover.setText(activeTextObject.clickerHoverText != null ? activeTextObject.clickerHoverText : "");
+        if (txtTextClickEvent != null) txtTextClickEvent.setText(activeTextObject.clickEvent != null ? activeTextObject.clickEvent : "S01_" + activeTextObject.id + "_CLICKED");
+        if (chkTextClickerHighlight != null) chkTextClickerHighlight.setSelected(activeTextObject.clickerHighlight);
+        if (spTextClickerLayer != null) spTextClickerLayer.setValue(activeTextObject.clickerLayer);
+        updatingTextSpinners = false;
+    }
+
+    public void syncActiveTextFromUi() {
+        if (activeTextObject == null || updatingTextSpinners) return;
+        if (txtTextId != null && !txtTextId.getText().trim().isEmpty()) {
+            activeTextObject.id = txtTextId.getText().trim().replaceAll("[^a-zA-Z0-9_]", "_").toUpperCase();
+        }
+        if (txtTextContent != null) {
+            activeTextObject.text = txtTextContent.getText();
+        }
+        if (spTextX != null && spTextY != null) {
+            activeTextObject.x = (int) spTextX.getValue();
+            activeTextObject.y = (int) spTextY.getValue();
+        }
+        if (cmbTextFont != null && cmbTextFont.getSelectedItem() != null) {
+            activeTextObject.font = cmbTextFont.getSelectedItem().toString();
+        }
+        if (cmbTextColor != null && cmbTextColor.getSelectedItem() != null) {
+            activeTextObject.color1 = cmbTextColor.getSelectedItem().toString();
+        }
+        if (cmbTextAlignH != null && cmbTextAlignH.getSelectedItem() != null) {
+            activeTextObject.alignH = cmbTextAlignH.getSelectedItem().toString();
+        }
+        if (spTextDepth != null) {
+            activeTextObject.depth = (int) spTextDepth.getValue();
+        }
+
+        if (chkTextIsClicker != null) {
+            activeTextObject.isTextModelClicker = chkTextIsClicker.isSelected();
+        }
+        if (txtTextClickerId != null) {
+            activeTextObject.clickerId = txtTextClickerId.getText().trim().replaceAll("[^a-zA-Z0-9_]", "_").toUpperCase();
+        }
+        if (txtTextClickerHover != null) {
+            activeTextObject.clickerHoverText = txtTextClickerHover.getText().trim();
+        }
+        if (txtTextClickEvent != null) {
+            activeTextObject.clickEvent = txtTextClickEvent.getText().trim();
+        }
+        if (chkTextClickerHighlight != null) {
+            activeTextObject.clickerHighlight = chkTextClickerHighlight.isSelected();
+        }
+        if (spTextClickerLayer != null) {
+            activeTextObject.clickerLayer = (int) spTextClickerLayer.getValue();
+        }
+
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
     }
 
     private void addNextWaypoint() {
@@ -2346,16 +3026,21 @@ public class BrokVnClickAreaWindow extends JFrame {
         topContainer.add(topHeader, BorderLayout.NORTH);
         topContainer.add(topToolBar, BorderLayout.SOUTH);
 
-        // Table with checkbox editor
-        String[] cols = new String[] { "Type", "ID / Name", "Layer", "Depth", "Visible" };
+        // Table with checkbox editor for As Clicker and Visible
+        String[] cols = new String[] { "Type", "ID / Name", "Layer", "Depth", "As Clicker", "Visible" };
         layerTableModel = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
-                return c == 4;
+                if (c == 5) return true; // Visible column
+                if (c == 4) { // As Clicker column (editable for Sprites and Texts)
+                    String t = String.valueOf(getValueAt(r, 0));
+                    return t.startsWith("Sprite") || t.startsWith("Text");
+                }
+                return false;
             }
             @Override
             public Class<?> getColumnClass(int col) {
-                return (col == 4) ? Boolean.class : String.class;
+                return (col == 4 || col == 5) ? Boolean.class : String.class;
             }
         };
 
@@ -2369,36 +3054,83 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTable.setGridColor(cBorder);
 
         // Column widths
-        layerTable.getColumnModel().getColumn(0).setPreferredWidth(130);
-        layerTable.getColumnModel().getColumn(1).setPreferredWidth(140);
-        layerTable.getColumnModel().getColumn(2).setPreferredWidth(50);
-        layerTable.getColumnModel().getColumn(3).setPreferredWidth(50);
-        layerTable.getColumnModel().getColumn(4).setPreferredWidth(60);
+        layerTable.getColumnModel().getColumn(0).setPreferredWidth(125);
+        layerTable.getColumnModel().getColumn(1).setPreferredWidth(130);
+        layerTable.getColumnModel().getColumn(2).setPreferredWidth(45);
+        layerTable.getColumnModel().getColumn(3).setPreferredWidth(45);
+        layerTable.getColumnModel().getColumn(4).setPreferredWidth(75);
+        layerTable.getColumnModel().getColumn(5).setPreferredWidth(55);
 
-        // Instant mouse click listener for the Visible checkbox column
+        // Instant mouse click listener for As Clicker (col 4) and Visible (col 5)
         layerTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
                 int row = layerTable.rowAtPoint(e.getPoint());
                 int col = layerTable.columnAtPoint(e.getPoint());
-                if (row >= 0 && col == 4) {
-                    Boolean val = (Boolean) layerTableModel.getValueAt(row, 4);
-                    boolean newVal = (val == null) || !val;
-                    layerTableModel.setValueAt(newVal, row, 4);
-                    updateObjectVisibilityFromTableRow(row, newVal);
+                if (row >= 0 && row < layerTableModel.getRowCount()) {
+                    String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+                    String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+
+                    if (col == 4) { // Toggle "As Clicker"
+                        if (type.startsWith("Sprite")) {
+                            for (OverlayObject obj : overlayObjects) {
+                                if (obj.imageId.equals(id)) {
+                                    obj.isImageModelClicker = !obj.isImageModelClicker;
+                                    if (obj.clickerId == null || obj.clickerId.isEmpty()) {
+                                        obj.clickerId = "CLICK_" + obj.imageId;
+                                    }
+                                    if (obj.clickEvent == null || obj.clickEvent.isEmpty()) {
+                                        obj.clickEvent = "S00_" + obj.imageId + "_CLICKED";
+                                    }
+                                    layerTableModel.setValueAt(obj.isImageModelClicker, row, 4);
+                                    if (obj == activeOverlayObject) {
+                                        syncImageUiFromActiveObject();
+                                    }
+                                    break;
+                                }
+                            }
+                        } else if (type.startsWith("Text")) {
+                            for (TextObject txt : textObjects) {
+                                if (txt.id.equals(id)) {
+                                    txt.isTextModelClicker = !txt.isTextModelClicker;
+                                    if (txt.clickerId == null || txt.clickerId.isEmpty()) {
+                                        txt.clickerId = "CLICK_" + txt.id;
+                                    }
+                                    if (txt.clickEvent == null || txt.clickEvent.isEmpty()) {
+                                        txt.clickEvent = "S01_" + txt.id + "_CLICKED";
+                                    }
+                                    layerTableModel.setValueAt(txt.isTextModelClicker, row, 4);
+                                    if (txt == activeTextObject) {
+                                        syncTextUiFromActiveObject();
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        updateScriptPreview();
+                        updateOverallBrokVnFile();
+                        if (canvas != null) canvas.repaint();
+                    } else if (col == 5) { // Toggle "Visible"
+                        Boolean val = (Boolean) layerTableModel.getValueAt(row, 5);
+                        boolean newVal = (val == null) || !val;
+                        layerTableModel.setValueAt(newVal, row, 5);
+                        updateObjectVisibilityFromTableRow(row, newVal);
+                    }
                 }
             }
         });
 
-        // Listener for checkbox edits in Visible column
+        // Listener for checkbox edits in Visible / As Clicker column
         layerTableModel.addTableModelListener(e -> {
             if (isRefreshingLayerTable) return;
             int row = e.getFirstRow();
             int col = e.getColumn();
-            if (col == 4 && row >= 0 && row < layerTableModel.getRowCount()) {
-                Boolean val = (Boolean) layerTableModel.getValueAt(row, 4);
-                boolean isVis = (val != null && val);
-                updateObjectVisibilityFromTableRow(row, isVis);
+            if (row >= 0 && row < layerTableModel.getRowCount()) {
+                if (col == 5) {
+                    Boolean val = (Boolean) layerTableModel.getValueAt(row, 5);
+                    boolean isVis = (val != null && val);
+                    updateObjectVisibilityFromTableRow(row, isVis);
+                }
             }
         });
 
@@ -2416,8 +3148,25 @@ public class BrokVnClickAreaWindow extends JFrame {
                             activeEditTarget = ActiveEditTarget.IMAGE;
                             if (btnTargetImage != null) btnTargetImage.setSelected(true);
                             if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+                            if (btnTargetText != null) btnTargetText.setSelected(false);
+                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(1);
                             hasActiveClicker = false;
                             syncImageUiFromActiveObject();
+                            if (canvas != null) canvas.repaint();
+                            break;
+                        }
+                    }
+                } else if (type.startsWith("Text")) {
+                    for (TextObject txt : textObjects) {
+                        if (txt.id.equals(id)) {
+                            activeTextObject = txt;
+                            activeEditTarget = ActiveEditTarget.TEXT;
+                            if (btnTargetText != null) btnTargetText.setSelected(true);
+                            if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+                            if (btnTargetImage != null) btnTargetImage.setSelected(false);
+                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(2);
+                            hasActiveClicker = false;
+                            syncTextUiFromActiveObject();
                             if (canvas != null) canvas.repaint();
                             break;
                         }
@@ -2430,6 +3179,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                             activeEditTarget = ActiveEditTarget.CLICKER;
                             if (btnTargetClicker != null) btnTargetClicker.setSelected(true);
                             if (btnTargetImage != null) btnTargetImage.setSelected(false);
+                            if (btnTargetText != null) btnTargetText.setSelected(false);
+                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(0);
                             hasActiveClicker = true;
                             loadClickerDef(def);
                             if (canvas != null) canvas.repaint();
@@ -2454,12 +3205,12 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         JButton btnDepthUp = new JButton("+1 Depth / Layer");
         styleStandardButton(btnDepthUp);
-        btnDepthUp.setToolTipText("Increase depth for selected Sprite or layer number for selected Clicker");
+        btnDepthUp.setToolTipText("Increase depth for selected Sprite/Text or layer number for selected Clicker");
         btnDepthUp.addActionListener(e -> moveSelectedDepth(1));
 
         JButton btnDepthDown = new JButton("-1 Depth / Layer");
         styleStandardButton(btnDepthDown);
-        btnDepthDown.setToolTipText("Decrease depth for selected Sprite or layer number for selected Clicker");
+        btnDepthDown.setToolTipText("Decrease depth for selected Sprite/Text or layer number for selected Clicker");
         btnDepthDown.addActionListener(e -> moveSelectedDepth(-1));
 
         JButton btnRefreshLayers = new JButton("Refresh Table");
@@ -2520,7 +3271,19 @@ public class BrokVnClickAreaWindow extends JFrame {
                     obj.imageId,
                     "-",
                     String.valueOf(obj.getCalculatedDepth()),
+                    obj.isImageModelClicker,
                     obj.visible
+            });
+        }
+
+        for (TextObject txt : textObjects) {
+            layerTableModel.addRow(new Object[] {
+                    "Text (TEXTNEW)",
+                    txt.id,
+                    "-",
+                    String.valueOf(txt.depth),
+                    txt.isTextModelClicker,
+                    txt.visible
             });
         }
 
@@ -2530,16 +3293,37 @@ public class BrokVnClickAreaWindow extends JFrame {
                     def.id,
                     String.valueOf(def.layer),
                     "-",
+                    false,
                     def.visible
             });
         }
 
         if (lblLayerStats != null) {
-            lblLayerStats.setText(String.format("Items: %d (%d Sprites, %d Clickers)",
-                    overlayObjects.size() + savedClickers.size(),
+            lblLayerStats.setText(String.format("Items: %d (%d Sprites, %d Texts, %d Clickers)",
+                    overlayObjects.size() + textObjects.size() + savedClickers.size(),
                     overlayObjects.size(),
+                    textObjects.size(),
                     savedClickers.size()));
         }
+
+        // Also update sprite and text dropdown selectors in Clicker panel
+        if (cmbImageModelSprite != null) {
+            Object currentSel = cmbImageModelSprite.getSelectedItem();
+            cmbImageModelSprite.removeAllItems();
+            for (OverlayObject obj : overlayObjects) {
+                cmbImageModelSprite.addItem(obj.imageId);
+            }
+            if (currentSel != null) cmbImageModelSprite.setSelectedItem(currentSel);
+        }
+        if (cmbTextModelText != null) {
+            Object currentSel = cmbTextModelText.getSelectedItem();
+            cmbTextModelText.removeAllItems();
+            for (TextObject txt : textObjects) {
+                cmbTextModelText.addItem(txt.id);
+            }
+            if (currentSel != null) cmbTextModelText.setSelectedItem(currentSel);
+        }
+
         isRefreshingLayerTable = false;
     }
 
@@ -2551,6 +3335,13 @@ public class BrokVnClickAreaWindow extends JFrame {
             for (OverlayObject obj : overlayObjects) {
                 if (obj.imageId.equals(id)) {
                     obj.visible = isVis;
+                    break;
+                }
+            }
+        } else if (type.startsWith("Text")) {
+            for (TextObject txt : textObjects) {
+                if (txt.id.equals(id)) {
+                    txt.visible = isVis;
                     break;
                 }
             }
@@ -2580,6 +3371,13 @@ public class BrokVnClickAreaWindow extends JFrame {
                     break;
                 }
             }
+        } else if (type.startsWith("Text")) {
+            for (TextObject txt : textObjects) {
+                if (txt.id.equals(id)) {
+                    txt.visible = !txt.visible;
+                    break;
+                }
+            }
         } else {
             for (ClickerDef def : savedClickers) {
                 if (def.id.equals(id)) {
@@ -2599,6 +3397,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         for (OverlayObject obj : overlayObjects) {
             obj.visible = visible;
         }
+        for (TextObject txt : textObjects) {
+            txt.visible = visible;
+        }
         for (ClickerDef def : savedClickers) {
             def.visible = visible;
         }
@@ -2609,7 +3410,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     private void deleteSelectedLayerItem() {
         int row = layerTable.getSelectedRow();
         if (row < 0 || row >= layerTableModel.getRowCount()) {
-            JOptionPane.showMessageDialog(this, "Please select a Sprite or Clicker from the table to delete.", "No Selection", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please select a Sprite, Text, or Clicker from the table to delete.", "No Selection", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         String type = String.valueOf(layerTableModel.getValueAt(row, 0));
@@ -2635,6 +3436,23 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
                 syncImageUiFromActiveObject();
                 String delCmd = "IMAGEDEL=" + id;
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(delCmd), null);
+            }
+        } else if (type.startsWith("Text")) {
+            TextObject target = null;
+            for (TextObject txt : textObjects) {
+                if (txt.id.equals(id)) {
+                    target = txt;
+                    break;
+                }
+            }
+            if (target != null) {
+                textObjects.remove(target);
+                if (activeTextObject == target) {
+                    activeTextObject = textObjects.isEmpty() ? null : textObjects.get(0);
+                }
+                syncTextUiFromActiveObject();
+                String delCmd = "TEXTDEL=" + id;
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(delCmd), null);
             }
         } else {
@@ -2669,8 +3487,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                     d.event, d.text
             });
         }
-        if (rightTabbedPane != null && rightTabbedPane.getTabCount() > 3) {
-            rightTabbedPane.setTitleAt(3, "Clickers List (" + savedClickers.size() + ")");
+        if (rightTabbedPane != null && rightTabbedPane.getTabCount() > 4) {
+            rightTabbedPane.setTitleAt(4, "Clickers List (" + savedClickers.size() + ")");
         }
     }
 
@@ -2714,6 +3532,13 @@ public class BrokVnClickAreaWindow extends JFrame {
                 if (obj.imageId.equals(id)) {
                     obj.autoDepth = false;
                     obj.depth = Math.max(0, obj.depth + delta);
+                    break;
+                }
+            }
+        } else if (type.startsWith("Text")) {
+            for (TextObject txt : textObjects) {
+                if (txt.id.equals(id)) {
+                    txt.depth = Math.max(0, txt.depth + delta);
                     break;
                 }
             }
@@ -2763,6 +3588,8 @@ public class BrokVnClickAreaWindow extends JFrame {
             case "DELETE":
                 if (type.startsWith("Sprite")) {
                     cmd = "IMAGEDEL=" + id;
+                } else if (type.startsWith("Text")) {
+                    cmd = "TEXTDEL=" + id;
                 } else {
                     cmd = "CLICKERDEL=" + id;
                 }
@@ -2978,6 +3805,13 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         }
 
+        if (!textObjects.isEmpty()) {
+            sb.append("\t# --- Onscreen Scene Texts (TEXTNEW) ---\n");
+            for (TextObject txt : textObjects) {
+                sb.append(txt.toTextNewScript()).append("\n");
+            }
+        }
+
         if (!savedClickers.isEmpty()) {
             sb.append("\t# --- Scene Interactive Clickers ---\n");
             for (ClickerDef def : savedClickers) {
@@ -3021,10 +3855,15 @@ public class BrokVnClickAreaWindow extends JFrame {
             currentImageResText = "No image loaded";
             overlayObjects.clear();
             activeOverlayObject = null;
+            textObjects.clear();
+            activeTextObject = null;
             savedClickers.clear();
             if (clickerTableModel != null) clickerTableModel.setRowCount(0);
-            rightTabbedPane.setTitleAt(3, "Clickers List (0)");
+            if (rightTabbedPane != null && rightTabbedPane.getTabCount() > 4) {
+                rightTabbedPane.setTitleAt(4, "Clickers List (0)");
+            }
             syncImageUiFromActiveObject();
+            syncTextUiFromActiveObject();
             updateBoundsLabel();
             updateScriptPreview();
             updateOverallBrokVnFile();
@@ -3070,6 +3909,12 @@ public class BrokVnClickAreaWindow extends JFrame {
                 json.append("      \"animSpeed\": ").append(obj.animSpeed).append(",\n");
                 json.append("      \"animEnd\": \"").append(obj.animEnd).append("\",\n");
                 json.append("      \"useWalkPath\": ").append(obj.useWalkPath).append(",\n");
+                json.append("      \"isImageModelClicker\": ").append(obj.isImageModelClicker).append(",\n");
+                json.append("      \"clickerId\": \"").append(obj.clickerId != null ? obj.clickerId : "").append("\",\n");
+                json.append("      \"precise\": ").append(obj.precise).append(",\n");
+                json.append("      \"clickEvent\": \"").append(obj.clickEvent != null ? obj.clickEvent : "").append("\",\n");
+                json.append("      \"clickerText\": \"").append(obj.clickerText != null ? obj.clickerText.replace("\"", "\\\"") : "").append("\",\n");
+                json.append("      \"clickerLayer\": ").append(obj.clickerLayer).append(",\n");
 
                 // Waypoints
                 json.append("      \"waypoints\": [\n");
@@ -3081,6 +3926,30 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
                 json.append("      ]\n");
                 json.append("    }").append(i < overlayObjects.size() - 1 ? ",\n" : "\n");
+            }
+            json.append("  ],\n");
+
+            // Onscreen Texts
+            json.append("  \"texts\": [\n");
+            for (int i = 0; i < textObjects.size(); i++) {
+                TextObject txt = textObjects.get(i);
+                json.append("    {\n");
+                json.append("      \"id\": \"").append(txt.id).append("\",\n");
+                json.append("      \"text\": \"").append(txt.text != null ? txt.text.replace("\"", "\\\"") : "").append("\",\n");
+                json.append("      \"x\": ").append(txt.x).append(",\n");
+                json.append("      \"y\": ").append(txt.y).append(",\n");
+                json.append("      \"font\": \"").append(txt.font != null ? txt.font : "FONT_DEFAULT").append("\",\n");
+                json.append("      \"color1\": \"").append(txt.color1 != null ? txt.color1 : "c_white").append("\",\n");
+                json.append("      \"alignH\": \"").append(txt.alignH != null ? txt.alignH : "CENTER").append("\",\n");
+                json.append("      \"depth\": ").append(txt.depth).append(",\n");
+                json.append("      \"visible\": ").append(txt.visible).append(",\n");
+                json.append("      \"isTextModelClicker\": ").append(txt.isTextModelClicker).append(",\n");
+                json.append("      \"clickerId\": \"").append(txt.clickerId != null ? txt.clickerId : "").append("\",\n");
+                json.append("      \"clickerHighlight\": ").append(txt.clickerHighlight).append(",\n");
+                json.append("      \"clickerHoverText\": \"").append(txt.clickerHoverText != null ? txt.clickerHoverText.replace("\"", "\\\"") : "").append("\",\n");
+                json.append("      \"clickEvent\": \"").append(txt.clickEvent != null ? txt.clickEvent : "").append("\",\n");
+                json.append("      \"clickerLayer\": ").append(txt.clickerLayer).append("\n");
+                json.append("    }").append(i < textObjects.size() - 1 ? ",\n" : "\n");
             }
             json.append("  ],\n");
 
@@ -3102,7 +3971,12 @@ public class BrokVnClickAreaWindow extends JFrame {
                 json.append("      \"canDpad\": ").append(d.canDpad).append(",\n");
                 json.append("      \"type\": \"").append(d.type).append("\",\n");
                 json.append("      \"stayActive\": \"").append(d.stayActive).append("\",\n");
-                json.append("      \"layer\": ").append(d.layer).append("\n");
+                json.append("      \"layer\": ").append(d.layer).append(",\n");
+                json.append("      \"useImageModel\": ").append(d.useImageModel).append(",\n");
+                json.append("      \"imageModel\": \"").append(d.imageModel != null ? d.imageModel : "").append("\",\n");
+                json.append("      \"useTextModel\": ").append(d.useTextModel).append(",\n");
+                json.append("      \"textModel\": \"").append(d.textModel != null ? d.textModel : "").append("\",\n");
+                json.append("      \"precise\": ").append(d.precise).append("\n");
                 json.append("    }").append(i < savedClickers.size() - 1 ? ",\n" : "\n");
             }
             json.append("  ]\n");
@@ -3126,6 +4000,7 @@ public class BrokVnClickAreaWindow extends JFrame {
             setTitle(APP_NAME + " - [" + currentProjectFile.getName() + "]");
 
             overlayObjects.clear();
+            textObjects.clear();
             savedClickers.clear();
             if (clickerTableModel != null) clickerTableModel.setRowCount(0);
 
@@ -3142,9 +4017,13 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
 
             int spArrStart = content.indexOf("\"sprites\": [");
-            int spArrEnd = content.indexOf("\"clickers\": [");
-            if (spArrStart >= 0 && spArrEnd > spArrStart) {
-                String spBlock = content.substring(spArrStart, spArrEnd);
+            int txtArrStart = content.indexOf("\"texts\": [");
+            int clkArrStart = content.indexOf("\"clickers\": [");
+
+            int spEnd = (txtArrStart >= 0) ? txtArrStart : (clkArrStart >= 0 ? clkArrStart : content.length());
+
+            if (spArrStart >= 0 && spEnd > spArrStart) {
+                String spBlock = content.substring(spArrStart, spEnd);
                 String[] items = spBlock.split("\\{\\s*\"id\":");
                 for (int i = 1; i < items.length; i++) {
                     String item = items[i];
@@ -3165,12 +4044,19 @@ public class BrokVnClickAreaWindow extends JFrame {
                             obj.autoDepth = extractJsonBool(item, "\"autoDepth\": ", true);
                             obj.isAnimation = extractJsonBool(item, "\"isAnimation\": ", false);
                             obj.nbFrames = extractJsonInt(item, "\"nbFrames\": ", 1);
-                            obj.animSpeed = extractJsonInt(item, "\"animSpeed\": ", 8);
+                            obj.animSpeed = extractJsonInt(item, "\"animSpeed\": ", 25);
                             obj.animEnd = extractJsonString(item, "\"animEnd\": \"");
                             if (obj.animEnd.isEmpty()) obj.animEnd = "REPEAT";
                             obj.useWalkPath = extractJsonBool(item, "\"useWalkPath\": ", false);
-                            obj.sliceFrames();
 
+                            obj.isImageModelClicker = extractJsonBool(item, "\"isImageModelClicker\": ", false);
+                            obj.clickerId = extractJsonString(item, "\"clickerId\": \"");
+                            obj.precise = extractJsonBool(item, "\"precise\": ", true);
+                            obj.clickEvent = extractJsonString(item, "\"clickEvent\": \"");
+                            obj.clickerText = extractJsonString(item, "\"clickerText\": \"");
+                            obj.clickerLayer = extractJsonInt(item, "\"clickerLayer\": ", 0);
+
+                            obj.sliceFrames();
                             overlayObjects.add(obj);
                             activeOverlayObject = obj;
                         }
@@ -3178,8 +4064,43 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
             }
 
-            if (spArrEnd >= 0) {
-                String clkBlock = content.substring(spArrEnd);
+            if (txtArrStart >= 0 && clkArrStart > txtArrStart) {
+                String txtBlock = content.substring(txtArrStart, clkArrStart);
+                String[] items = txtBlock.split("\\{\\s*\"id\":");
+                for (int i = 1; i < items.length; i++) {
+                    String item = items[i];
+                    String tId = "MY_TEXT";
+                    int q1 = item.indexOf("\"");
+                    int q2 = item.indexOf("\"", q1 + 1);
+                    if (q1 >= 0 && q2 > q1) tId = item.substring(q1 + 1, q2);
+                    String tText = extractJsonString(item, "\"text\": \"");
+                    int tx = extractJsonInt(item, "\"x\": ", 960);
+                    int ty = extractJsonInt(item, "\"y\": ", 540);
+
+                    TextObject to = new TextObject(tId, tText, tx, ty);
+                    to.font = extractJsonString(item, "\"font\": \"");
+                    if (to.font.isEmpty()) to.font = "FONT_DEFAULT";
+                    to.color1 = extractJsonString(item, "\"color1\": \"");
+                    if (to.color1.isEmpty()) to.color1 = "c_white";
+                    to.alignH = extractJsonString(item, "\"alignH\": \"");
+                    if (to.alignH.isEmpty()) to.alignH = "CENTER";
+                    to.depth = extractJsonInt(item, "\"depth\": ", 1);
+                    to.visible = extractJsonBool(item, "\"visible\": ", true);
+
+                    to.isTextModelClicker = extractJsonBool(item, "\"isTextModelClicker\": ", false);
+                    to.clickerId = extractJsonString(item, "\"clickerId\": \"");
+                    to.clickerHighlight = extractJsonBool(item, "\"clickerHighlight\": ", true);
+                    to.clickerHoverText = extractJsonString(item, "\"clickerHoverText\": \"");
+                    to.clickEvent = extractJsonString(item, "\"clickEvent\": \"");
+                    to.clickerLayer = extractJsonInt(item, "\"clickerLayer\": ", 0);
+
+                    textObjects.add(to);
+                    activeTextObject = to;
+                }
+            }
+
+            if (clkArrStart >= 0) {
+                String clkBlock = content.substring(clkArrStart);
                 String[] clkItems = clkBlock.split("\\{\\s*\"id\":");
                 for (int i = 1; i < clkItems.length; i++) {
                     String item = clkItems[i];
@@ -3204,6 +4125,12 @@ public class BrokVnClickAreaWindow extends JFrame {
                     if (d.stayActive.isEmpty()) d.stayActive = "DEFAULT";
                     d.layer = extractJsonInt(item, "\"layer\": ", 0);
 
+                    d.useImageModel = extractJsonBool(item, "\"useImageModel\": ", false);
+                    d.imageModel = extractJsonString(item, "\"imageModel\": \"");
+                    d.useTextModel = extractJsonBool(item, "\"useTextModel\": ", false);
+                    d.textModel = extractJsonString(item, "\"textModel\": \"");
+                    d.precise = extractJsonBool(item, "\"precise\": ", true);
+
                     savedClickers.add(d);
                     if (clickerTableModel != null) {
                         clickerTableModel.addRow(new Object[] {
@@ -3215,8 +4142,11 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
             }
 
-            rightTabbedPane.setTitleAt(3, "Clickers List (" + savedClickers.size() + ")");
+            if (rightTabbedPane != null && rightTabbedPane.getTabCount() > 4) {
+                rightTabbedPane.setTitleAt(4, "Clickers List (" + savedClickers.size() + ")");
+            }
             if (activeOverlayObject != null) syncImageUiFromActiveObject();
+            if (activeTextObject != null) syncTextUiFromActiveObject();
             updateBoundsLabel();
             updateScriptPreview();
             updateOverallBrokVnFile();
@@ -3945,6 +4875,14 @@ public class BrokVnClickAreaWindow extends JFrame {
         syncWaypointUiFromSelection();
         updateWalkDistanceLabel();
 
+        // ImageModel Clicker UI
+        if (chkImgIsClicker != null) chkImgIsClicker.setSelected(activeOverlayObject.isImageModelClicker);
+        if (txtImgClickerId != null) txtImgClickerId.setText(activeOverlayObject.clickerId != null && !activeOverlayObject.clickerId.isEmpty() ? activeOverlayObject.clickerId : "CLICK_" + activeOverlayObject.imageId);
+        if (txtImgClickEvent != null) txtImgClickEvent.setText(activeOverlayObject.clickEvent != null && !activeOverlayObject.clickEvent.isEmpty() ? activeOverlayObject.clickEvent : "S00_" + activeOverlayObject.imageId + "_CLICKED");
+        if (chkImgPrecise != null) chkImgPrecise.setSelected(activeOverlayObject.precise);
+        if (txtImgClickerText != null) txtImgClickerText.setText(activeOverlayObject.clickerText != null ? activeOverlayObject.clickerText : "");
+        if (spImgClickerLayer != null) spImgClickerLayer.setValue(activeOverlayObject.clickerLayer);
+
         updatingImgSpinners = false;
         updateBoundsLabel();
         updateScriptPreview();
@@ -3984,6 +4922,26 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
         if (chkFlipH != null) {
             activeOverlayObject.flipH = chkFlipH.isSelected();
+        }
+
+        // ImageModel Clicker UI
+        if (chkImgIsClicker != null) {
+            activeOverlayObject.isImageModelClicker = chkImgIsClicker.isSelected();
+        }
+        if (txtImgClickerId != null) {
+            activeOverlayObject.clickerId = txtImgClickerId.getText().trim().replaceAll("[^a-zA-Z0-9_]", "_").toUpperCase();
+        }
+        if (txtImgClickEvent != null) {
+            activeOverlayObject.clickEvent = txtImgClickEvent.getText().trim();
+        }
+        if (chkImgPrecise != null) {
+            activeOverlayObject.precise = chkImgPrecise.isSelected();
+        }
+        if (txtImgClickerText != null) {
+            activeOverlayObject.clickerText = txtImgClickerText.getText().trim();
+        }
+        if (spImgClickerLayer != null) {
+            activeOverlayObject.clickerLayer = (int) spImgClickerLayer.getValue();
         }
 
         // Animation UI
@@ -4101,6 +5059,16 @@ public class BrokVnClickAreaWindow extends JFrame {
             d.layer = (int) spClickerLayer.getValue();
         }
 
+        d.useImageModel = (chkUseImageModel != null && chkUseImageModel.isSelected());
+        d.imageModel = (cmbImageModelSprite != null && cmbImageModelSprite.getSelectedItem() != null)
+                ? cmbImageModelSprite.getSelectedItem().toString()
+                : "";
+        d.useTextModel = (chkUseTextModel != null && chkUseTextModel.isSelected());
+        d.textModel = (cmbTextModelText != null && cmbTextModelText.getSelectedItem() != null)
+                ? cmbTextModelText.getSelectedItem().toString()
+                : "";
+        d.precise = (chkPrecise != null && chkPrecise.isSelected());
+
         int hash = Math.abs(d.id.hashCode());
         float hue = (hash % 360) / 360.0f;
         d.color = Color.getHSBColor(hue, 0.85f, 0.95f);
@@ -4119,6 +5087,16 @@ public class BrokVnClickAreaWindow extends JFrame {
         cmbStayActive.setSelectedItem(d.stayActive);
         if (spClickerLayer != null) spClickerLayer.setValue(d.layer);
 
+        if (chkUseImageModel != null) chkUseImageModel.setSelected(d.useImageModel);
+        if (cmbImageModelSprite != null && d.imageModel != null && !d.imageModel.isEmpty()) {
+            cmbImageModelSprite.setSelectedItem(d.imageModel);
+        }
+        if (chkUseTextModel != null) chkUseTextModel.setSelected(d.useTextModel);
+        if (cmbTextModelText != null && d.textModel != null && !d.textModel.isEmpty()) {
+            cmbTextModelText.setSelectedItem(d.textModel);
+        }
+        if (chkPrecise != null) chkPrecise.setSelected(d.precise);
+
         setBoundsCoordinates(d.x1, d.y1, d.x2, d.y2);
     }
 
@@ -4136,10 +5114,18 @@ public class BrokVnClickAreaWindow extends JFrame {
                 sb.append(activeOverlayObject.toImageNewScript());
                 sb.append("\n");
             }
+            if (activeTextObject != null) {
+                sb.append(activeTextObject.toTextNewScript());
+                sb.append("\n");
+            }
             sb.append(d.toBrokVnScript());
         } else if (mode.contains("IMAGENEW") || mode.contains("Sprite")) {
             if (activeOverlayObject != null) {
                 sb.append(activeOverlayObject.toImageNewScript());
+            }
+        } else if (mode.contains("TEXTNEW") || mode.contains("Text")) {
+            if (activeTextObject != null) {
+                sb.append(activeTextObject.toTextNewScript());
             }
         } else if (mode.contains("IMAGEMOVE") || mode.contains("Walk")) {
             if (activeOverlayObject != null && activeOverlayObject.useWalkPath && activeOverlayObject.waypoints.size() >= 2) {
@@ -4743,7 +5729,36 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // 2. Check if clicking on Draggable Character Blue Label Badge
+                        // 2. Check if clicking on Text Object (TEXTNEW)
+                        TextObject hitTxt = null;
+                        if (activeTextObject != null && activeTextObject.contains(engX, engY)) {
+                            hitTxt = activeTextObject;
+                        } else {
+                            for (int i = textObjects.size() - 1; i >= 0; i--) {
+                                TextObject t = textObjects.get(i);
+                                if (t.contains(engX, engY)) {
+                                    hitTxt = t;
+                                    break;
+                                }
+                            }
+                        }
+                        if (hitTxt != null && (activeEditTarget == ActiveEditTarget.TEXT || (!hitTxt.text.isEmpty() && hitTxt.contains(engX, engY)))) {
+                            activeTextObject = hitTxt;
+                            activeEditTarget = ActiveEditTarget.TEXT;
+                            if (btnTargetText != null) btnTargetText.setSelected(true);
+                            if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+                            if (btnTargetImage != null) btnTargetImage.setSelected(false);
+                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(2);
+                            syncTextUiFromActiveObject();
+                            currentDragType = DragHandleType.TEXT_OBJECT;
+                            textDragOffsetX = engX - hitTxt.x;
+                            textDragOffsetY = engY - hitTxt.y;
+                            lblCursorPos.setText(String.format("Moving Text '%s' at [ X: %d, Y: %d ]", hitTxt.id, hitTxt.x, hitTxt.y));
+                            repaint();
+                            return;
+                        }
+
+                        // 3. Check if clicking on Draggable Character Blue Label Badge
                         if (activeOverlayObject != null && (chkShowOverlays == null || chkShowOverlays.isSelected())) {
                             if (mouseX >= lastRenderedTagX && mouseX <= lastRenderedTagX + lastRenderedTagW &&
                                 mouseY >= lastRenderedTagY && mouseY <= lastRenderedTagY + lastRenderedTagH) {
@@ -4758,7 +5773,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // 3. Check if clicking on Sprite Body (IMAGENEW)
+                        // 4. Check if clicking on Sprite Body (IMAGENEW)
                         if (chkShowOverlays == null || chkShowOverlays.isSelected()) {
                             OverlayObject hitObj = null;
                             if (activeOverlayObject != null && activeOverlayObject.contains(engX, engY)) {
@@ -4787,7 +5802,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                             }
                         }
 
-                        // 4. Default: Drag Clicker Selection Rectangle (CLICKERNEW)
+                        // 5. Default: Drag Clicker Selection Rectangle (CLICKERNEW)
                         dragStartX = engX;
                         dragStartY = engY;
                         currentDragType = DragHandleType.CLICKER_BOX;
@@ -4845,7 +5860,17 @@ public class BrokVnClickAreaWindow extends JFrame {
                                 activeOverlayObject.imageId, activeOverlayObject.getAnchorX(), activeOverlayObject.getAnchorY()));
                         repaint();
                     }
-                    // C. Dragging Sprite Body
+                    // C. Dragging Text Object
+                    else if (currentDragType == DragHandleType.TEXT_OBJECT && activeTextObject != null) {
+                        int newX = curX - textDragOffsetX;
+                        int newY = curY - textDragOffsetY;
+                        activeTextObject.x = newX;
+                        activeTextObject.y = newY;
+                        syncTextUiFromActiveObject();
+                        lblCursorPos.setText(String.format("Text '%s' -> [ X: %d, Y: %d ]", activeTextObject.id, activeTextObject.x, activeTextObject.y));
+                        repaint();
+                    }
+                    // D. Dragging Sprite Body
                     else if (currentDragType == DragHandleType.OVERLAY_SPRITE && activeOverlayObject != null) {
                         int newX = curX - overlayDragOffsetX;
                         int newY = curY - overlayDragOffsetY;
@@ -4872,7 +5897,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                                 activeOverlayObject.imageId, activeOverlayObject.getAnchorX(), activeOverlayObject.getAnchorY()));
                         repaint();
                     }
-                    // D. Dragging Clicker Rectangle
+                    // E. Dragging Clicker Rectangle
                     else if (currentDragType == DragHandleType.CLICKER_BOX) {
                         setBoundsCoordinates(dragStartX, dragStartY, curX, curY);
                         lblCursorPos.setText(String.format("Clicker Hotspot -> [ X1: %d, Y1: %d | X2: %d, Y2: %d ]",
@@ -4889,6 +5914,10 @@ public class BrokVnClickAreaWindow extends JFrame {
                         updateScriptPreview();
                         repaint();
                     } else if (currentDragType == DragHandleType.OVERLAY_SPRITE || currentDragType == DragHandleType.OVERLAY_LABEL) {
+                        currentDragType = DragHandleType.NONE;
+                        updateScriptPreview();
+                        repaint();
+                    } else if (currentDragType == DragHandleType.TEXT_OBJECT) {
                         currentDragType = DragHandleType.NONE;
                         updateScriptPreview();
                         repaint();
@@ -4925,6 +5954,15 @@ public class BrokVnClickAreaWindow extends JFrame {
                             mouseY >= lastRenderedTagY && mouseY <= lastRenderedTagY + lastRenderedTagH) {
                             setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
                             lblCursorPos.setText(String.format("Over Label '%s' (Drag to move character)", activeOverlayObject.imageId));
+                            return;
+                        }
+                    }
+
+                    // Hover check for texts
+                    for (TextObject txt : textObjects) {
+                        if (txt.visible && txt.contains(ex, ey)) {
+                            setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                            lblCursorPos.setText(String.format("Over Text '%s': \"%s\" at [ X: %d, Y: %d ]", txt.id, txt.text, txt.x, txt.y));
                             return;
                         }
                     }
@@ -5056,6 +6094,24 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.drawLine(ax, ay - 7, ax, ay + 7);
                             g2.drawOval(ax - 4, ay - 4, 8, 8);
                         }
+
+                        // IMAGEMODEL Clicker Badge on sprite
+                        if (obj.isImageModelClicker) {
+                            String imgBadge = "[IMAGEMODEL: " + (obj.clickerId != null && !obj.clickerId.isEmpty() ? obj.clickerId : "CLICK_" + obj.imageId) + "]";
+                            g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                            FontMetrics ibfm = g2.getFontMetrics();
+                            int ibw = ibfm.stringWidth(imgBadge) + 8;
+                            int ibh = 16;
+                            int ibx = sx + 4;
+                            int iby = sy + 4;
+                            g2.setColor(new Color(10, 45, 20, 230));
+                            g2.fillRoundRect(ibx, iby, ibw, ibh, 5, 5);
+                            g2.setColor(new Color(75, 220, 110));
+                            g2.setStroke(new BasicStroke(1.2f));
+                            g2.drawRoundRect(ibx, iby, ibw, ibh, 5, 5);
+                            g2.setColor(Color.WHITE);
+                            g2.drawString(imgBadge, ibx + 4, iby + 12);
+                        }
                     }
                 }
 
@@ -5171,6 +6227,85 @@ public class BrokVnClickAreaWindow extends JFrame {
                     g2.drawRoundRect(tx, ty, tw, th, 8, 8);
                     g2.setColor(Color.WHITE);
                     g2.drawString(tag, tx + 6, ty + 15);
+                }
+            }
+
+            // Render Onscreen Scene Texts (TEXTNEW)
+            for (TextObject txt : textObjects) {
+                if (!txt.visible) continue;
+                int tx = toScreenX(txt.x);
+                int ty = toScreenY(txt.y);
+
+                Font f = new Font("Segoe UI", Font.BOLD, (int) Math.round(18 * currentScale));
+                if ("FONT_TITLE".equalsIgnoreCase(txt.font)) {
+                    f = new Font("Segoe UI", Font.BOLD, (int) Math.round(28 * currentScale));
+                } else if ("FONT_SUBTITLE".equalsIgnoreCase(txt.font)) {
+                    f = new Font("Segoe UI", Font.BOLD, (int) Math.round(22 * currentScale));
+                } else if ("FONT_BIG".equalsIgnoreCase(txt.font)) {
+                    f = new Font("Segoe UI", Font.BOLD, (int) Math.round(20 * currentScale));
+                } else if ("FONT_SMALL".equalsIgnoreCase(txt.font)) {
+                    f = new Font("Segoe UI", Font.PLAIN, (int) Math.round(13 * currentScale));
+                } else if ("FONT_CODE".equalsIgnoreCase(txt.font)) {
+                    f = new Font("Consolas", Font.BOLD, (int) Math.round(16 * currentScale));
+                }
+                g2.setFont(f);
+                FontMetrics tfm = g2.getFontMetrics();
+
+                String displayStr = (txt.text != null && !txt.text.isEmpty()) ? txt.text : "[" + txt.id + "]";
+                int strW = tfm.stringWidth(displayStr);
+                int strH = tfm.getHeight();
+
+                int drawTextX = tx;
+                if ("CENTER".equalsIgnoreCase(txt.alignH)) {
+                    drawTextX = tx - strW / 2;
+                } else if ("RIGHT".equalsIgnoreCase(txt.alignH)) {
+                    drawTextX = tx - strW;
+                }
+                int drawTextY = ty;
+
+                // Drop shadow for crisp readability against any background
+                g2.setColor(new Color(0, 0, 0, 220));
+                g2.drawString(displayStr, drawTextX + 2, drawTextY + 2);
+                g2.drawString(displayStr, drawTextX - 1, drawTextY - 1);
+                g2.drawString(displayStr, drawTextX + 1, drawTextY - 1);
+                g2.drawString(displayStr, drawTextX - 1, drawTextY + 1);
+
+                // Foreground text in configured color
+                g2.setColor(txt.getAwtColor());
+                g2.drawString(displayStr, drawTextX, drawTextY);
+
+                // Active selection box & anchor crosshair
+                if (txt == activeTextObject) {
+                    float[] textDash = { 4.0f, 3.0f };
+                    g2.setColor(new Color(255, 0, 220)); // Magenta Neon
+                    g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, textDash, 0.0f));
+                    int boxPad = 4;
+                    g2.drawRect(drawTextX - boxPad, drawTextY - tfm.getAscent() - boxPad, strW + boxPad * 2, strH + boxPad * 2);
+
+                    // Crosshair on anchor point
+                    g2.setColor(new Color(255, 80, 80));
+                    g2.setStroke(new BasicStroke(2.0f));
+                    g2.drawLine(tx - 6, ty, tx + 6, ty);
+                    g2.drawLine(tx, ty - 6, tx, ty + 6);
+                    g2.drawOval(tx - 3, ty - 3, 6, 6);
+                }
+
+                // Attached TEXTMODEL Clicker badge
+                if (txt.isTextModelClicker) {
+                    String tBadge = "[TEXTMODEL: " + (txt.clickerId != null && !txt.clickerId.isEmpty() ? txt.clickerId : "CLICK_" + txt.id) + "]";
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
+                    FontMetrics bfm = g2.getFontMetrics();
+                    int bw = bfm.stringWidth(tBadge) + 8;
+                    int bh = 16;
+                    int bx = drawTextX;
+                    int by = drawTextY - tfm.getAscent() - bh - 6;
+                    g2.setColor(new Color(50, 10, 65, 230));
+                    g2.fillRoundRect(bx, by, bw, bh, 5, 5);
+                    g2.setColor(new Color(220, 80, 255));
+                    g2.setStroke(new BasicStroke(1.2f));
+                    g2.drawRoundRect(bx, by, bw, bh, 5, 5);
+                    g2.setColor(Color.WHITE);
+                    g2.drawString(tBadge, bx + 4, by + 12);
                 }
             }
 
