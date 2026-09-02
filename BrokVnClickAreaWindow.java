@@ -730,6 +730,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JSpinner spImageScale;
     private JSlider sldImageScale;
     private JCheckBox chkFlipH;
+    private JCheckBox chkSpriteVisible;
 
     // ImageModel Clicker UI (inside Sprite Tab)
     private JCheckBox chkImgIsClicker;
@@ -747,6 +748,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JComboBox<String> cmbTextColor;
     private JComboBox<String> cmbTextAlignH;
     private JSpinner spTextDepth;
+    private JCheckBox chkTextVisible;
     private boolean updatingTextSpinners = false;
 
     // TextModel Clicker UI (inside Text Tab)
@@ -2037,8 +2039,26 @@ public class BrokVnClickAreaWindow extends JFrame {
         gbc.gridx = 1; gbc.gridy = 2; gbc.weightx = 0.72;
         imgPropBox.add(scalePanel, gbc);
 
+        chkFlipH = new JCheckBox("Flip Character (Horizontal Mirror)", false);
+        styleCheckBox(chkFlipH);
+        chkFlipH.addActionListener(e -> syncActiveObjectFromImageUi());
+
+        chkSpriteVisible = new JCheckBox("Visible on Canvas", true);
+        styleCheckBox(chkSpriteVisible);
+        chkSpriteVisible.addActionListener(e -> {
+            if (activeOverlayObject != null && !updatingImgSpinners) {
+                activeOverlayObject.visible = chkSpriteVisible.isSelected();
+                refreshLayerTable();
+                if (canvas != null) canvas.repaint();
+            }
+        });
+
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
-        imgPropBox.add(chkFlipH, gbc);
+        JPanel visFlipPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        visFlipPnl.setOpaque(false);
+        visFlipPnl.add(chkSpriteVisible);
+        visFlipPnl.add(chkFlipH);
+        imgPropBox.add(visFlipPnl, gbc);
         gbc.gridwidth = 1;
 
         gbc.gridx = 0; gbc.gridy = 4; gbc.weightx = 0.28;
@@ -2604,11 +2624,26 @@ public class BrokVnClickAreaWindow extends JFrame {
         gbc.gridx = 1; gbc.gridy = 5; gbc.weightx = 0.65;
         propBox.add(cmbTextAlignH, gbc);
 
+        chkTextVisible = new JCheckBox("Visible", true);
+        styleCheckBox(chkTextVisible);
+        chkTextVisible.addActionListener(e -> {
+            if (activeTextObject != null && !updatingTextSpinners) {
+                activeTextObject.visible = chkTextVisible.isSelected();
+                refreshLayerTable();
+                if (canvas != null) canvas.repaint();
+            }
+        });
+
         gbc.gridx = 0; gbc.gridy = 6; gbc.weightx = 0.35;
-        propBox.add(createStyledLabel("Depth (DEPTH):"), gbc);
+        propBox.add(createStyledLabel("Depth / Visible:"), gbc);
+        JPanel textDepthVisPnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        textDepthVisPnl.setOpaque(false);
+        textDepthVisPnl.add(chkTextVisible);
+        textDepthVisPnl.add(createStyledLabel("DEPTH:"));
+        spTextDepth.setPreferredSize(new Dimension(56, 24));
+        textDepthVisPnl.add(spTextDepth);
         gbc.gridx = 1; gbc.gridy = 6; gbc.weightx = 0.65;
-        spTextDepth.setPreferredSize(new Dimension(68, 24));
-        propBox.add(spTextDepth, gbc);
+        propBox.add(textDepthVisPnl, gbc);
 
         // Clickable Text Model Configuration Box (TEXTMODEL)
         JPanel textModelBox = new JPanel(new GridBagLayout());
@@ -2752,6 +2787,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (cmbTextColor != null) cmbTextColor.setSelectedItem(activeTextObject.color1);
         if (cmbTextAlignH != null) cmbTextAlignH.setSelectedItem(activeTextObject.alignH);
         if (spTextDepth != null) spTextDepth.setValue(activeTextObject.depth);
+        if (chkTextVisible != null) chkTextVisible.setSelected(activeTextObject.visible);
 
         if (chkTextIsClicker != null) chkTextIsClicker.setSelected(activeTextObject.isTextModelClicker);
         if (txtTextClickerId != null) txtTextClickerId.setText(activeTextObject.clickerId != null ? activeTextObject.clickerId : "CLICK_" + activeTextObject.id);
@@ -2785,6 +2821,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
         if (spTextDepth != null) {
             activeTextObject.depth = (int) spTextDepth.getValue();
+        }
+        if (chkTextVisible != null) {
+            activeTextObject.visible = chkTextVisible.isSelected();
         }
 
         if (chkTextIsClicker != null) {
@@ -3184,17 +3223,12 @@ public class BrokVnClickAreaWindow extends JFrame {
         topContainer.add(topHeader, BorderLayout.NORTH);
         topContainer.add(topToolBar, BorderLayout.SOUTH);
 
-        // Table with checkbox editor for As Clicker and Visible
+        // Table with Boolean columns for As Clicker and Visible
         String[] cols = new String[] { "Type", "ID / Name", "Layer", "Depth", "As Clicker", "Visible" };
         layerTableModel = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
-                if (c == 5) return true; // Visible column
-                if (c == 4) { // As Clicker column (editable for Sprites and Texts)
-                    String t = String.valueOf(getValueAt(r, 0));
-                    return t.startsWith("Sprite") || t.startsWith("Text");
-                }
-                return false;
+                return false; // Non-editable directly so JTable internal cell editor never conflicts with instant mouse click handler
             }
             @Override
             public Class<?> getColumnClass(int col) {
@@ -3219,7 +3253,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTable.getColumnModel().getColumn(4).setPreferredWidth(75);
         layerTable.getColumnModel().getColumn(5).setPreferredWidth(55);
 
-        // Instant mouse click listener for As Clicker (col 4) and Visible (col 5)
+        // Instant, single-click mouse listener for As Clicker (col 4) and Visible (col 5)
         layerTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -3274,20 +3308,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                         layerTableModel.setValueAt(newVal, row, 5);
                         updateObjectVisibilityFromTableRow(row, newVal);
                     }
-                }
-            }
-        });
-
-        // Listener for checkbox edits in Visible / As Clicker column
-        layerTableModel.addTableModelListener(e -> {
-            if (isRefreshingLayerTable) return;
-            int row = e.getFirstRow();
-            int col = e.getColumn();
-            if (row >= 0 && row < layerTableModel.getRowCount()) {
-                if (col == 5) {
-                    Boolean val = (Boolean) layerTableModel.getValueAt(row, 5);
-                    boolean isVis = (val != null && val);
-                    updateObjectVisibilityFromTableRow(row, isVis);
                 }
             }
         });
@@ -3493,6 +3513,9 @@ public class BrokVnClickAreaWindow extends JFrame {
             for (OverlayObject obj : overlayObjects) {
                 if (obj.imageId.equals(id)) {
                     obj.visible = isVis;
+                    if (obj == activeOverlayObject && chkSpriteVisible != null) {
+                        chkSpriteVisible.setSelected(isVis);
+                    }
                     break;
                 }
             }
@@ -3500,6 +3523,9 @@ public class BrokVnClickAreaWindow extends JFrame {
             for (TextObject txt : textObjects) {
                 if (txt.id.equals(id)) {
                     txt.visible = isVis;
+                    if (txt == activeTextObject && chkTextVisible != null) {
+                        chkTextVisible.setSelected(isVis);
+                    }
                     break;
                 }
             }
@@ -4998,6 +5024,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (spImageScale != null) spImageScale.setValue(activeOverlayObject.scale);
         if (sldImageScale != null) sldImageScale.setValue(Math.min(200, Math.max(10, activeOverlayObject.scale)));
         if (chkFlipH != null) chkFlipH.setSelected(activeOverlayObject.flipH);
+        if (chkSpriteVisible != null) chkSpriteVisible.setSelected(activeOverlayObject.visible);
 
         // Animation UI
         if (chkIsAnimation != null) chkIsAnimation.setSelected(activeOverlayObject.isAnimation);
@@ -5080,6 +5107,9 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
         if (chkFlipH != null) {
             activeOverlayObject.flipH = chkFlipH.isSelected();
+        }
+        if (chkSpriteVisible != null) {
+            activeOverlayObject.visible = chkSpriteVisible.isSelected();
         }
 
         // ImageModel Clicker UI
