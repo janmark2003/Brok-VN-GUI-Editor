@@ -28,7 +28,7 @@ import java.util.prefs.Preferences;
  * BrokVN GUI Editor
  * Visual Novel Clickable Area, Hotspot Studio, Sprite Placement, Multi-Waypoint Walk Paths,
  * Layer System, Full-Screen Preview, Project State Manager, and GitHub API Auto-Updater
- * for the Brok VN Engine (1920×1080 Native Canvas).
+ * for the Brok VN Engine (1920x1080 Native Canvas).
  */
 public class BrokVnClickAreaWindow extends JFrame {
 
@@ -171,10 +171,10 @@ public class BrokVnClickAreaWindow extends JFrame {
         public boolean autoDepth = true;
         public boolean visible = true; // Visibility in Editor & Canvas
 
-        // Spritesheet & Animation settings (Default Speed = 8 fps)
+        // Spritesheet & Animation settings (VN Standard Default Speed = 25)
         public boolean isAnimation = false;
         public int nbFrames = 1;
-        public int animSpeed = 8; // Calibrated default 8 FPS
+        public int animSpeed = 25; // Calibrated default 25 (Standard VN Engine Speed)
         public String animEnd = "REPEAT"; // "REPEAT", "BLOCK", "DESTROY"
         public boolean isPlaying = true;
         public long lastFrameTimeNano = 0;
@@ -212,14 +212,14 @@ public class BrokVnClickAreaWindow extends JFrame {
             if (rawW >= rawH * 2 && rawW % rawH == 0) {
                 this.nbFrames = rawW / rawH;
                 this.isAnimation = true;
-                this.animSpeed = 8; // Calibrated default 8 FPS
+                this.animSpeed = 25; // Standard VN Speed 25
                 this.animEnd = "REPEAT";
                 this.origin = "CENTER";
                 this.useOrigin = true;
             } else {
                 this.nbFrames = 1;
                 this.isAnimation = false;
-                this.animSpeed = 8;
+                this.animSpeed = 25;
             }
 
             sliceFrames();
@@ -234,8 +234,17 @@ public class BrokVnClickAreaWindow extends JFrame {
             waypoints.clear();
             int ax = getAnchorX();
             int ay = getAnchorY();
-            waypoints.add(new Waypoint("Point A", ax, ay, 3, ""));
-            waypoints.add(new Waypoint("Point B", ax + 1248, ay, 3, "S01_" + imageId + "_ARRIVED"));
+            int walkDist = 1248; // 65% width
+            int bx;
+            if (ax > 960) {
+                bx = Math.max(150, ax - walkDist);
+                this.flipH = true;
+            } else {
+                bx = Math.min(1770, ax + walkDist);
+                this.flipH = false;
+            }
+            waypoints.add(new Waypoint("Point A", ax, ay, 25, ""));
+            waypoints.add(new Waypoint("Point B", bx, ay, 25, "S01_" + imageId + "_ARRIVED"));
         }
 
         public void sliceFrames() {
@@ -511,6 +520,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     private int curY1 = 100;
     private int curX2 = 500;
     private int curY2 = 400;
+    private boolean hasActiveClicker = false;
 
     // UI Components
     private ClickAreaCanvas canvas;
@@ -607,7 +617,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     }
 
     public BrokVnClickAreaWindow(JFrame parent, boolean isDarkMode, File projectBaseDir, InsertCallback callback) {
-        super(APP_NAME + " - Visual Novel Studio (1920×1080 Native Canvas)");
+        super(APP_NAME + " - Visual Novel Studio (1920x1080 Native Canvas)");
         this.isDarkMode = isDarkMode;
         this.projectBaseDir = (projectBaseDir != null) ? projectBaseDir : findDefaultProjectDir();
         this.insertCallback = callback;
@@ -665,9 +675,9 @@ public class BrokVnClickAreaWindow extends JFrame {
             long now = System.nanoTime();
             boolean needRepaint = false;
             for (OverlayObject obj : overlayObjects) {
-                // Spritesheet Frame Cycling (calibrated default 8 fps)
+                // Spritesheet Frame Cycling (calibrated VN speed 25 = 8 fps visual)
                 if (obj.isAnimation && obj.isPlaying && obj.nbFrames > 1 && obj.animSpeed > 0) {
-                    long frameIntervalNano = 1_000_000_000L / obj.animSpeed;
+                    long frameIntervalNano = (long) (1_000_000_000L / Math.max(1.0, obj.animSpeed * 0.32));
                     if (now - obj.lastFrameTimeNano >= frameIntervalNano) {
                         obj.lastFrameTimeNano = now;
                         int next = obj.currentFrameIndex + 1;
@@ -692,7 +702,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                     }
                 }
 
-                // Multi-Waypoint Walk Path Movement
+                // Multi-Waypoint Walk Path Movement (VN speed 25 calibrated)
                 if (obj.useWalkPath && obj.isPlaying && obj.waypoints.size() >= 2 && currentDragType != DragHandleType.OVERLAY_SPRITE) {
                     int numSegments = obj.waypoints.size() - 1;
                     if (obj.currentWaypointSegment >= 0 && obj.currentWaypointSegment < numSegments) {
@@ -704,8 +714,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                         double totalDist = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
 
                         if (totalDist > 0.001) {
-                            int speed = Math.max(1, pEnd.speed);
-                            double stepProg = (double) speed / totalDist;
+                            double scaledSpeed = Math.max(1.0, pEnd.speed * 0.12);
+                            double stepProg = scaledSpeed / totalDist;
 
                             if (obj.walkForward) {
                                 obj.currentWalkProgress += stepProg;
@@ -860,6 +870,11 @@ public class BrokVnClickAreaWindow extends JFrame {
     private void applyUiManagerDefaults() {
         UIManager.put("Panel.background", cPanelBg);
         UIManager.put("Panel.foreground", cFg);
+        UIManager.put("OptionPane.background", cPanelBg);
+        UIManager.put("OptionPane.foreground", cFg);
+        UIManager.put("OptionPane.messageForeground", cFg);
+        UIManager.put("OptionPane.messageArea.background", cPanelBg);
+        UIManager.put("OptionPane.buttonArea.background", cPanelBg);
         UIManager.put("Button.background", cButtonBg);
         UIManager.put("Button.foreground", cButtonFg);
         UIManager.put("Button.border", BorderFactory.createCompoundBorder(
@@ -979,7 +994,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         JButton btnImportBg = new JButton("Import Background...");
         stylePrimaryButton(btnImportBg, new Color(0, 122, 255));
-        btnImportBg.setToolTipText("Load 1920×1080 background image via Windows File Explorer");
+        btnImportBg.setToolTipText("Load 1920x1080 background image via Windows File Explorer");
         btnImportBg.addActionListener(e -> chooseAndLoadImage());
 
         JButton btnPlaceObject = new JButton("Place Sprite .PNG...");
@@ -1071,19 +1086,20 @@ public class BrokVnClickAreaWindow extends JFrame {
                 canvas.repaint();
         });
 
-        row2Left.add(lblToolMode);
-        row2Left.add(btnTargetClicker);
-        row2Left.add(btnTargetImage);
-
-        JPanel row2Right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        row2Right.setOpaque(false);
-
-        JButton btnBringPointBToolbar = new JButton("📍 Show Point B");
+        JButton btnBringPointBToolbar = new JButton("Show Point B");
         stylePrimaryButton(btnBringPointBToolbar, new Color(0, 155, 225));
         btnBringPointBToolbar.setToolTipText("If Point B is offscreen or overlapping, brings Point B directly into visible canvas view");
         btnBringPointBToolbar.addActionListener(e -> bringPointBToScreen());
 
-        row2Right.add(btnBringPointBToolbar);
+        row2Left.add(lblToolMode);
+        row2Left.add(btnTargetClicker);
+        row2Left.add(btnTargetImage);
+        row2Left.add(Box.createHorizontalStrut(6));
+        row2Left.add(btnBringPointBToolbar);
+
+        JPanel row2Right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        row2Right.setOpaque(false);
+
         chkShowOverlays = new JCheckBox("Show Sprites", true);
         chkShowGrid = new JCheckBox("Grid", true);
         chkShowAllClickers = new JCheckBox("Clicker Outlines", true);
@@ -1152,7 +1168,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         JMenuItem miSaveProjAs = new JMenuItem("Save Project As...");
         miSaveProjAs.addActionListener(e -> saveProject(true));
 
-        JMenuItem miImportBg = new JMenuItem("Import 1920×1080 Background...");
+        JMenuItem miImportBg = new JMenuItem("Import 1920x1080 Background...");
         miImportBg.addActionListener(e -> chooseAndLoadImage());
 
         JMenuItem miImportSprite = new JMenuItem("Place Character Sprite .PNG...");
@@ -1208,16 +1224,12 @@ public class BrokVnClickAreaWindow extends JFrame {
         JMenuItem miCheckUpdate = new JMenuItem("Check for Updates...");
         miCheckUpdate.addActionListener(e -> showUpdateDialog(true));
 
-        JMenuItem miConfigToken = new JMenuItem("Configure GitHub API Token...");
-        miConfigToken.addActionListener(e -> showConfigureTokenDialog());
-
         JMenuItem miAbout = new JMenuItem("About " + APP_NAME);
         miAbout.addActionListener(e -> showAboutDialog());
 
         mHelp.add(miDoc);
         mHelp.addSeparator();
         mHelp.add(miCheckUpdate);
-        mHelp.add(miConfigToken);
         mHelp.add(miAbout);
 
         mb.add(mFile);
@@ -1246,7 +1258,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel row1 = new JPanel(new BorderLayout(12, 0));
         row1.setOpaque(false);
 
-        lblImageStatus = new JLabel("Engine Canvas: 1920×1080 | [No Image Loaded]");
+        lblImageStatus = new JLabel("Engine Canvas: 1920x1080 | [No Image Loaded]");
         lblImageStatus.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lblImageStatus.setForeground(cFgSubdued);
 
@@ -1260,7 +1272,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel row2 = new JPanel(new BorderLayout(12, 0));
         row2.setOpaque(false);
 
-        lblCurrentBounds = new JLabel("Clicker: [100, 100] -> [500, 400] (400 × 300 px)");
+        lblCurrentBounds = new JLabel("Clicker: [100, 100] -> [500, 400] (400 x 300 px)");
         lblCurrentBounds.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lblCurrentBounds.setForeground(new Color(255, 215, 0)); // Gold
         row2.add(lblCurrentBounds, BorderLayout.WEST);
@@ -1929,7 +1941,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
         spSelectedWpX = new JSpinner(new SpinnerNumberModel(250, -3000, 5000, 1));
         spSelectedWpY = new JSpinner(new SpinnerNumberModel(560, -3000, 5000, 1));
-        spSelectedWpSpeed = new JSpinner(new SpinnerNumberModel(3, 1, 50, 1));
+        spSelectedWpSpeed = new JSpinner(new SpinnerNumberModel(25, 1, 100, 1));
         txtSelectedWpEvent = new JTextField("S01_ARRIVED");
 
         styleSpinner(spSelectedWpX);
@@ -1974,7 +1986,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnDelWp.setToolTipText("Remove the currently selected waypoint");
         btnDelWp.addActionListener(e -> removeSelectedWaypoint());
 
-        JButton btnBringPtB = new JButton("📍 Show Point B");
+        JButton btnBringPtB = new JButton("Show Point B");
         stylePrimaryButton(btnBringPtB, new Color(0, 155, 225));
         btnBringPtB.setToolTipText("If Point B is offscreen or overlapping, brings Point B directly into visible screen view");
         btnBringPtB.addActionListener(e -> bringPointBToScreen());
@@ -2019,7 +2031,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel walkPresetBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         walkPresetBar.setOpaque(false);
 
-        JButton btnPresetBringB = new JButton("📍 Bring Point B to Screen");
+        JButton btnPresetBringB = new JButton("Bring Point B to Screen");
         stylePrimaryButton(btnPresetBringB, new Color(0, 155, 225));
         btnPresetBringB.addActionListener(e -> bringPointBToScreen());
 
@@ -2098,7 +2110,7 @@ public class BrokVnClickAreaWindow extends JFrame {
             lastX = lastWp.x + 300;
             lastY = lastWp.y;
         }
-        Waypoint newWp = new Waypoint(label, lastX, lastY, 3, "S01_" + activeOverlayObject.imageId + "_" + nextLetter);
+        Waypoint newWp = new Waypoint(label, lastX, lastY, 25, "S01_" + activeOverlayObject.imageId + "_" + nextLetter);
         activeOverlayObject.waypoints.add(newWp);
         refreshWaypointSelector();
         cmbWaypointSelector.setSelectedIndex(activeOverlayObject.waypoints.size() - 1);
@@ -2180,14 +2192,14 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (walkRight) {
             int startX = Math.min(600, activeOverlayObject.getAnchorX());
             int targetX = startX + distance;
-            activeOverlayObject.waypoints.add(new Waypoint("Point A", startX, curY, 3, ""));
-            activeOverlayObject.waypoints.add(new Waypoint("Point B", targetX, curY, 3, "S01_" + activeOverlayObject.imageId + "_ARRIVED"));
+            activeOverlayObject.waypoints.add(new Waypoint("Point A", startX, curY, 25, ""));
+            activeOverlayObject.waypoints.add(new Waypoint("Point B", targetX, curY, 25, "S01_" + activeOverlayObject.imageId + "_ARRIVED"));
             activeOverlayObject.flipH = false;
         } else {
             int startX = Math.max(1320, activeOverlayObject.getAnchorX());
             int targetX = startX - distance;
-            activeOverlayObject.waypoints.add(new Waypoint("Point A", startX, curY, 3, ""));
-            activeOverlayObject.waypoints.add(new Waypoint("Point B", targetX, curY, 3, "S01_" + activeOverlayObject.imageId + "_ARRIVED"));
+            activeOverlayObject.waypoints.add(new Waypoint("Point A", startX, curY, 25, ""));
+            activeOverlayObject.waypoints.add(new Waypoint("Point B", targetX, curY, 25, "S01_" + activeOverlayObject.imageId + "_ARRIVED"));
             activeOverlayObject.flipH = true;
         }
 
@@ -2300,27 +2312,27 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel topToolBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         topToolBar.setOpaque(false);
 
-        JButton btnToggleVis = new JButton("👁️ Toggle Visibility");
+        JButton btnToggleVis = new JButton("Toggle Visibility");
         styleStandardButton(btnToggleVis);
         btnToggleVis.setToolTipText("Toggle visibility of the selected Sprite or Clicker layer");
         btnToggleVis.addActionListener(e -> toggleSelectedLayerVisibility());
 
-        JButton btnShowAll = new JButton("👁️ Show All");
+        JButton btnShowAll = new JButton("Show All");
         styleStandardButton(btnShowAll);
         btnShowAll.setToolTipText("Make all sprites and clickers visible on the editor canvas");
         btnShowAll.addActionListener(e -> setAllLayersVisibility(true));
 
-        JButton btnHideAll = new JButton("🙈 Hide All");
+        JButton btnHideAll = new JButton("Hide All");
         styleStandardButton(btnHideAll);
         btnHideAll.setToolTipText("Hide all sprites and clickers on the editor canvas");
         btnHideAll.addActionListener(e -> setAllLayersVisibility(false));
 
-        JButton btnDeleteSelected = new JButton("🗑️ Delete Selected");
+        JButton btnDeleteSelected = new JButton("Delete Selected");
         stylePrimaryButton(btnDeleteSelected, new Color(220, 53, 69)); // Danger Crimson
         btnDeleteSelected.setToolTipText("Delete the selected Sprite or Clicker from the project");
         btnDeleteSelected.addActionListener(e -> deleteSelectedLayerItem());
 
-        JButton btnDeleteLayer = new JButton("🗑️ Delete Entire Layer...");
+        JButton btnDeleteLayer = new JButton("Delete Entire Layer...");
         styleStandardButton(btnDeleteLayer);
         btnDeleteLayer.setToolTipText("Delete all clickers belonging to a specific layer number");
         btnDeleteLayer.addActionListener(e -> deleteEntireLayerDialog());
@@ -2363,36 +2375,34 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTable.getColumnModel().getColumn(3).setPreferredWidth(50);
         layerTable.getColumnModel().getColumn(4).setPreferredWidth(60);
 
-        // Listener for checkbox clicks in Visible column
+        // Instant mouse click listener for the Visible checkbox column
+        layerTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                int row = layerTable.rowAtPoint(e.getPoint());
+                int col = layerTable.columnAtPoint(e.getPoint());
+                if (row >= 0 && col == 4) {
+                    Boolean val = (Boolean) layerTableModel.getValueAt(row, 4);
+                    boolean newVal = (val == null) || !val;
+                    layerTableModel.setValueAt(newVal, row, 4);
+                    updateObjectVisibilityFromTableRow(row, newVal);
+                }
+            }
+        });
+
+        // Listener for checkbox edits in Visible column
         layerTableModel.addTableModelListener(e -> {
             if (isRefreshingLayerTable) return;
             int row = e.getFirstRow();
             int col = e.getColumn();
             if (col == 4 && row >= 0 && row < layerTableModel.getRowCount()) {
                 Boolean val = (Boolean) layerTableModel.getValueAt(row, 4);
-                String type = String.valueOf(layerTableModel.getValueAt(row, 0));
-                String id = String.valueOf(layerTableModel.getValueAt(row, 1));
                 boolean isVis = (val != null && val);
-                if (type.startsWith("Sprite")) {
-                    for (OverlayObject obj : overlayObjects) {
-                        if (obj.imageId.equals(id)) {
-                            obj.visible = isVis;
-                            break;
-                        }
-                    }
-                } else {
-                    for (ClickerDef def : savedClickers) {
-                        if (def.id.equals(id)) {
-                            def.visible = isVis;
-                            break;
-                        }
-                    }
-                }
-                if (canvas != null) canvas.repaint();
+                updateObjectVisibilityFromTableRow(row, isVis);
             }
         });
 
-        // Listener for row selection -> focuses object on canvas and switches editing mode
+        // Listener for row selection -> focuses and highlights object on canvas
         layerTable.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting() || isRefreshingLayerTable) return;
             int row = layerTable.getSelectedRow();
@@ -2405,6 +2415,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                             activeOverlayObject = obj;
                             activeEditTarget = ActiveEditTarget.IMAGE;
                             if (btnTargetImage != null) btnTargetImage.setSelected(true);
+                            if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+                            hasActiveClicker = false;
                             syncImageUiFromActiveObject();
                             if (canvas != null) canvas.repaint();
                             break;
@@ -2417,6 +2429,8 @@ public class BrokVnClickAreaWindow extends JFrame {
                             selectedClickerIndex = i;
                             activeEditTarget = ActiveEditTarget.CLICKER;
                             if (btnTargetClicker != null) btnTargetClicker.setSelected(true);
+                            if (btnTargetImage != null) btnTargetImage.setSelected(false);
+                            hasActiveClicker = true;
                             loadClickerDef(def);
                             if (canvas != null) canvas.repaint();
                             break;
@@ -2438,17 +2452,17 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel reorderBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         reorderBar.setOpaque(false);
 
-        JButton btnDepthUp = new JButton("🔼 Depth/Layer +1");
+        JButton btnDepthUp = new JButton("+1 Depth / Layer");
         styleStandardButton(btnDepthUp);
         btnDepthUp.setToolTipText("Increase depth for selected Sprite or layer number for selected Clicker");
         btnDepthUp.addActionListener(e -> moveSelectedDepth(1));
 
-        JButton btnDepthDown = new JButton("🔽 Depth/Layer -1");
+        JButton btnDepthDown = new JButton("-1 Depth / Layer");
         styleStandardButton(btnDepthDown);
         btnDepthDown.setToolTipText("Decrease depth for selected Sprite or layer number for selected Clicker");
         btnDepthDown.addActionListener(e -> moveSelectedDepth(-1));
 
-        JButton btnRefreshLayers = new JButton("🔄 Refresh");
+        JButton btnRefreshLayers = new JButton("Refresh Table");
         styleStandardButton(btnRefreshLayers);
         btnRefreshLayers.addActionListener(e -> refreshLayerTable());
 
@@ -2527,6 +2541,28 @@ public class BrokVnClickAreaWindow extends JFrame {
                     savedClickers.size()));
         }
         isRefreshingLayerTable = false;
+    }
+
+    private void updateObjectVisibilityFromTableRow(int row, boolean isVis) {
+        if (row < 0 || row >= layerTableModel.getRowCount()) return;
+        String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+        String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+        if (type.startsWith("Sprite")) {
+            for (OverlayObject obj : overlayObjects) {
+                if (obj.imageId.equals(id)) {
+                    obj.visible = isVis;
+                    break;
+                }
+            }
+        } else {
+            for (ClickerDef def : savedClickers) {
+                if (def.id.equals(id)) {
+                    def.visible = isVis;
+                    break;
+                }
+            }
+        }
+        if (canvas != null) canvas.repaint();
     }
 
     private void toggleSelectedLayerVisibility() {
@@ -2629,7 +2665,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         for (ClickerDef d : savedClickers) {
             clickerTableModel.addRow(new Object[] {
                     d.id, d.layer, d.x1, d.y1, d.x2, d.y2,
-                    (d.x2 - d.x1) + "×" + (d.y2 - d.y1),
+                    (d.x2 - d.x1) + "x" + (d.y2 - d.y1),
                     d.event, d.text
             });
         }
@@ -2923,7 +2959,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         StringBuilder sb = new StringBuilder();
         sb.append("#====================================================\n");
         sb.append("# OVERALL BROKVN SCENE SCRIPT\n");
-        sb.append("# Generated by ").append(APP_NAME).append(" (1920×1080 Canvas)\n");
+        sb.append("# Generated by ").append(APP_NAME).append(" (1920x1080 Canvas)\n");
         sb.append("#====================================================\n\n");
 
         sb.append("EVENT=S01_SCENE_START\n");
@@ -3172,7 +3208,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                     if (clickerTableModel != null) {
                         clickerTableModel.addRow(new Object[] {
                                 d.id, d.layer, d.x1, d.y1, d.x2, d.y2,
-                                (d.x2 - d.x1) + "×" + (d.y2 - d.y1),
+                                (d.x2 - d.x1) + "x" + (d.y2 - d.y1),
                                 d.event, d.text
                         });
                     }
@@ -3332,7 +3368,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                 g2.setFont(new Font("Segoe UI", Font.PLAIN, 12));
                 g2.setColor(new Color(255, 255, 255, 150));
-                g2.drawString("FULL SCREEN ENGINE PREVIEW (1920×1080) | Press ESC or F11 to Exit", offX + 16, offY + 24);
+                g2.drawString("FULL SCREEN ENGINE PREVIEW (1920x1080) | Press ESC or F11 to Exit", offX + 16, offY + 24);
                 g2.dispose();
             }
         };
@@ -3640,18 +3676,18 @@ public class BrokVnClickAreaWindow extends JFrame {
             if (w == 1920 && h == 1080) {
                 currentImage = img;
                 currentImageFile = file;
-                currentImageResText = "1920×1080 (Exact Match)";
-                lblImageStatus.setText("Engine Canvas: " + file.getName() + " | [1920×1080 Validated]");
+                currentImageResText = "1920x1080 (Exact Match)";
+                lblImageStatus.setText("Engine Canvas: " + file.getName() + " | [1920x1080 Validated]");
                 lblImageStatus.setForeground(new Color(85, 215, 105));
             } else {
-                String[] options = { "Auto-Scale to 1920×1080", "Cancel" };
+                String[] options = { "Auto-Scale to 1920x1080", "Cancel" };
                 int choice = JOptionPane.showOptionDialog(
                         this,
-                        "Brok VN Engine strictly requires backgrounds to be 1920×1080 pixels for accurate collision mapping.\n\n"
+                        "Brok VN Engine strictly requires backgrounds to be 1920x1080 pixels for accurate collision mapping.\n\n"
                                 + "Selected File: " + file.getName() + "\n"
-                                + "Actual Resolution: " + w + " × " + h + " px\n\n"
-                                + "Would you like to auto-scale this image to 1920×1080 now?",
-                        "Resolution Check (1920×1080 Required)",
+                                + "Actual Resolution: " + w + " x " + h + " px\n\n"
+                                + "Would you like to auto-scale this image to 1920x1080 now?",
+                        "Resolution Check (1920x1080 Required)",
                         JOptionPane.DEFAULT_OPTION,
                         JOptionPane.WARNING_MESSAGE,
                         null,
@@ -3668,8 +3704,8 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                     currentImage = scaled;
                     currentImageFile = file;
-                    currentImageResText = "Scaled to 1920×1080";
-                    lblImageStatus.setText("Engine Canvas: " + file.getName() + " | [Scaled to 1920×1080]");
+                    currentImageResText = "Scaled to 1920x1080";
+                    lblImageStatus.setText("Engine Canvas: " + file.getName() + " | [Scaled to 1920x1080]");
                     lblImageStatus.setForeground(new Color(245, 180, 60));
                 } else {
                     return;
@@ -3685,7 +3721,7 @@ public class BrokVnClickAreaWindow extends JFrame {
     }
 
     public void chooseAndLoadImage() {
-        File f = browseFileNative("Select 1920×1080 Background Image", FileDialog.LOAD, "Images", "png", "jpg", "jpeg", "bmp", "webp");
+        File f = browseFileNative("Select 1920x1080 Background Image", FileDialog.LOAD, "Images", "png", "jpg", "jpeg", "bmp", "webp");
         if (f != null) {
             loadImageFile(f);
         }
@@ -3747,10 +3783,10 @@ public class BrokVnClickAreaWindow extends JFrame {
                     int w = img.getWidth();
                     int h = img.getHeight();
 
-                    String[] options = { "Character / Spritesheet Animation", "Static Sprite / Object PNG", "Background (1920×1080)" };
+                    String[] options = { "Character / Spritesheet Animation", "Static Sprite / Object PNG", "Background (1920x1080)" };
                     int choice = JOptionPane.showOptionDialog(
                             this,
-                            "Importing Image: " + f.getName() + " (" + w + " × " + h + " px)\n\n"
+                            "Importing Image: " + f.getName() + " (" + w + " x " + h + " px)\n\n"
                                     + "Please select the import type for this image:",
                             "Import Image Type",
                             JOptionPane.DEFAULT_OPTION,
@@ -3830,7 +3866,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
 
         if (lblImageStatus != null) {
-            lblImageStatus.setText(String.format("Placed '%s' (%d×%d px)", obj.name, obj.nativeWidth, obj.nativeHeight));
+            lblImageStatus.setText(String.format("Placed '%s' (%dx%d px)", obj.name, obj.nativeWidth, obj.nativeHeight));
             lblImageStatus.setForeground(new Color(0, 215, 255));
         }
 
@@ -3857,7 +3893,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (spImgX != null) spImgX.setValue(activeOverlayObject.getAnchorX());
         if (spImgY != null) spImgY.setValue(activeOverlayObject.getAnchorY());
         if (lblImgDimensions != null) {
-            lblImgDimensions.setText(String.format("%d×%d px (Native: %d×%d)",
+            lblImgDimensions.setText(String.format("%dx%d px (Native: %dx%d)",
                     activeOverlayObject.getDisplayWidth(), activeOverlayObject.getDisplayHeight(),
                     activeOverlayObject.nativeWidth, activeOverlayObject.nativeHeight));
         }
@@ -3969,7 +4005,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
 
         if (lblImgDimensions != null) {
-            lblImgDimensions.setText(String.format("%d×%d px (Native: %d×%d)",
+            lblImgDimensions.setText(String.format("%dx%d px (Native: %dx%d)",
                     activeOverlayObject.getDisplayWidth(), activeOverlayObject.getDisplayHeight(),
                     activeOverlayObject.nativeWidth, activeOverlayObject.nativeHeight));
         }
@@ -3999,7 +4035,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (lblImageStatus != null) {
             lblImageStatus.setText(currentImageFile != null
                     ? "Engine Canvas: " + currentImageFile.getName() + " | [" + currentImageResText + "]"
-                    : "Engine Canvas: 1920×1080 | [No Image Loaded]");
+                    : "Engine Canvas: 1920x1080 | [No Image Loaded]");
             lblImageStatus.setForeground(cFgSubdued);
         }
         updateBoundsLabel();
@@ -4034,7 +4070,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (lblCurrentBounds == null) return;
         int w = curX2 - curX1;
         int h = curY2 - curY1;
-        String clickerPart = String.format("Clicker: [%d, %d] -> [%d, %d] (%d×%d px)", curX1, curY1, curX2, curY2, w, h);
+        String clickerPart = String.format("Clicker: [%d, %d] -> [%d, %d] (%dx%d px)", curX1, curY1, curX2, curY2, w, h);
         if (activeOverlayObject != null) {
             String imgPart = String.format("'%s': [Anchor X: %d, Y: %d | Scale: %d%% | Depth: %d]",
                     activeOverlayObject.imageId, activeOverlayObject.getAnchorX(), activeOverlayObject.getAnchorY(),
@@ -4165,7 +4201,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (clickerTableModel != null) {
             clickerTableModel.addRow(new Object[] {
                     def.id, def.layer, def.x1, def.y1, def.x2, def.y2,
-                    (def.x2 - def.x1) + "×" + (def.y2 - def.y1),
+                    (def.x2 - def.x1) + "x" + (def.y2 - def.y1),
                     def.event, def.text
             });
         }
@@ -4204,7 +4240,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
         StringBuilder sb = new StringBuilder();
         sb.append("#====================================================\n");
-        sb.append("# SCENE CLICKERS DEFINITIONS (1920×1080)\n");
+        sb.append("# SCENE CLICKERS DEFINITIONS (1920x1080)\n");
         sb.append("#====================================================\n");
         for (ClickerDef d : savedClickers) {
             sb.append(d.toBrokVnScript()).append("\n");
@@ -4600,7 +4636,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                         + "Dedicated Visual Novel Clickable Area Studio, Character Sprite Placement,\n"
                         + "Multi-Waypoint Walk Paths (A->B->C...), Layer System & Full Screen Preview.\n\n"
                         + "Connected Repository: " + GITHUB_REPO + "\n"
-                        + "Engine Resolution: 1920×1080 Native\n"
+                        + "Engine Resolution: 1920x1080 Native\n"
                         + "Features: Draggable Waypoints, In-App GitHub Auto-Updater, Project Save/Load (.brokproj),\n"
                         + "Draggable Character Badges, Free Frame Overlap, and Overall BrokVN Scene Script Generator.",
                 "About " + APP_NAME, JOptionPane.INFORMATION_MESSAGE);
@@ -4898,7 +4934,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                         for (OverlayObject obj : overlayObjects) {
                             if (obj.contains(ex, ey)) {
                                 overObject = true;
-                                lblCursorPos.setText(String.format("Over Sprite '%s' at [ X: %d, Y: %d ] (Size: %d×%d px)",
+                                lblCursorPos.setText(String.format("Over Sprite '%s' at [ X: %d, Y: %d ] (Size: %dx%d px)",
                                         obj.imageId, ex, ey, obj.getDisplayWidth(), obj.getDisplayHeight()));
                                 break;
                             }
@@ -4972,7 +5008,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                 g2.setColor(isDarkMode ? new Color(130, 140, 155) : new Color(100, 105, 115));
                 g2.setFont(new Font("Segoe UI", Font.BOLD, 18));
-                String msg1 = "1920×1080 Native Brok VN Canvas";
+                String msg1 = "1920x1080 Native Brok VN Canvas";
                 FontMetrics fm = g2.getFontMetrics();
                 g2.drawString(msg1, currentOffsetX + (drawW - fm.stringWidth(msg1)) / 2,
                         currentOffsetY + drawH / 2 - 20);
@@ -4991,6 +5027,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                 // 1. Render all sprite image bodies
                 for (OverlayObject obj : sortedOverlays) {
+                    if (!obj.visible) continue;
                     BufferedImage frameImg = obj.getCurrentFrame();
                     if (frameImg == null) frameImg = obj.fullImage;
                     if (frameImg != null) {
@@ -5024,6 +5061,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                 // 2. Render Multi-Waypoint Paths & High-Visibility Pins on top of all sprites
                 for (OverlayObject obj : sortedOverlays) {
+                    if (!obj.visible) continue;
                     if (obj.useWalkPath && (chkShowWaypoints == null || chkShowWaypoints.isSelected()) && obj.waypoints.size() >= 2) {
                         for (int w = 0; w < obj.waypoints.size() - 1; w++) {
                             Waypoint pA = obj.waypoints.get(w);
@@ -5082,7 +5120,7 @@ public class BrokVnClickAreaWindow extends JFrame {
                 }
 
                 // 3. Render Active Character Blue Label Badge on TOPMOST FOREGROUND layer
-                if (activeOverlayObject != null) {
+                if (activeOverlayObject != null && activeOverlayObject.visible) {
                     OverlayObject obj = activeOverlayObject;
                     int sx = toScreenX(obj.x);
                     int sy = toScreenY(obj.y);
@@ -5154,10 +5192,11 @@ public class BrokVnClickAreaWindow extends JFrame {
                 g2.drawString("Dialogue Box Zone (Y >= 780)", currentOffsetX + 10, diagY - 6);
             }
 
-            // Saved Clickers
+            // Saved Clickers (with selection highlighting)
             if (chkShowAllClickers != null && chkShowAllClickers.isSelected()) {
                 for (int i = 0; i < savedClickers.size(); i++) {
                     ClickerDef d = savedClickers.get(i);
+                    if (!d.visible) continue;
                     int sx1 = toScreenX(d.x1);
                     int sy1 = toScreenY(d.y1);
                     int sx2 = toScreenX(d.x2);
@@ -5165,13 +5204,23 @@ public class BrokVnClickAreaWindow extends JFrame {
                     int sw = sx2 - sx1;
                     int sh = sy2 - sy1;
 
+                    boolean isSelectedClicker = (selectedClickerIndex == i);
                     Color c = d.color != null ? d.color : Color.CYAN;
-                    g2.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 55));
-                    g2.fillRect(sx1, sy1, sw, sh);
 
-                    g2.setColor(c);
-                    g2.setStroke(new BasicStroke(1.5f));
-                    g2.drawRect(sx1, sy1, sw, sh);
+                    if (isSelectedClicker) {
+                        g2.setColor(new Color(255, 215, 0, 110));
+                        g2.fillRect(sx1, sy1, sw, sh);
+                        float[] selDash = { 5.0f, 3.0f };
+                        g2.setColor(new Color(255, 220, 0));
+                        g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, selDash, 0.0f));
+                        g2.drawRect(sx1, sy1, sw, sh);
+                    } else {
+                        g2.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 55));
+                        g2.fillRect(sx1, sy1, sw, sh);
+                        g2.setColor(c);
+                        g2.setStroke(new BasicStroke(1.5f));
+                        g2.drawRect(sx1, sy1, sw, sh);
+                    }
 
                     g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
                     String label = d.id + " [" + (d.x2 - d.x1) + "x" + (d.y2 - d.y1) + " | L:" + d.layer + "]";
@@ -5181,51 +5230,54 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                     g2.setColor(new Color(0, 0, 0, 190));
                     g2.fillRect(sx1, Math.max(currentOffsetY, sy1 - lh), lw, lh);
-                    g2.setColor(c);
+                    g2.setColor(isSelectedClicker ? Color.YELLOW : c);
                     g2.drawString(label, sx1 + 4, Math.max(currentOffsetY + 13, sy1 - 4));
                 }
             }
 
-            // Active Selection Rectangle (CLICKERNEW)
-            int selSx1 = toScreenX(curX1);
-            int selSy1 = toScreenY(curY1);
-            int selSx2 = toScreenX(curX2);
-            int selSy2 = toScreenY(curY2);
-            int selSw = selSx2 - selSx1;
-            int selSh = selSy2 - selSy1;
+            // Active Selection Rectangle (CLICKERNEW) - Only drawn when user has drawn/selected a clicker
+            if (hasActiveClicker && activeEditTarget == ActiveEditTarget.CLICKER) {
+                int selSx1 = toScreenX(curX1);
+                int selSy1 = toScreenY(curY1);
+                int selSx2 = toScreenX(curX2);
+                int selSy2 = toScreenY(curY2);
+                int selSw = selSx2 - selSx1;
+                int selSh = selSy2 - selSy1;
 
-            if (selSw > 0 && selSh > 0) {
-                g2.setColor(new Color(0, 190, 255, 75));
-                g2.fillRect(selSx1, selSy1, selSw, selSh);
+                if (selSw > 0 && selSh > 0) {
+                    g2.setColor(new Color(0, 190, 255, 75));
+                    g2.fillRect(selSx1, selSy1, selSw, selSh);
 
-                float[] dash = { 6.0f, 4.0f };
-                g2.setColor(new Color(255, 215, 0)); // Gold
-                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, dash, 0.0f));
-                g2.drawRect(selSx1, selSy1, selSw, selSh);
+                    float[] dash = { 6.0f, 4.0f };
+                    g2.setColor(new Color(255, 215, 0)); // Gold
+                    g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, dash, 0.0f));
+                    g2.drawRect(selSx1, selSy1, selSw, selSh);
 
-                int handleSize = 6;
-                g2.setColor(Color.WHITE);
-                g2.fillRect(selSx1 - 3, selSy1 - 3, handleSize, handleSize);
-                g2.fillRect(selSx2 - 3, selSy1 - 3, handleSize, handleSize);
-                g2.fillRect(selSx1 - 3, selSy2 - 3, handleSize, handleSize);
-                g2.fillRect(selSx2 - 3, selSy2 - 3, handleSize, handleSize);
+                    int handleSize = 6;
+                    g2.setColor(Color.WHITE);
+                    g2.fillRect(selSx1 - 3, selSy1 - 3, handleSize, handleSize);
+                    g2.fillRect(selSx2 - 3, selSy1 - 3, handleSize, handleSize);
+                    g2.fillRect(selSx1 - 3, selSy2 - 3, handleSize, handleSize);
+                    g2.fillRect(selSx2 - 3, selSy2 - 3, handleSize, handleSize);
 
-                String clickerIdStr = (txtId != null && !txtId.getText().trim().isEmpty()) ? txtId.getText().trim() : "CLICKER";
-                String dimTag = String.format(" Clicker %s: [%d, %d] -> [%d, %d] (%d × %d px) ",
-                        clickerIdStr, curX1, curY1, curX2, curY2, curX2 - curX1, curY2 - curY1);
-                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
-                FontMetrics dfm = g2.getFontMetrics();
-                int dw = dfm.stringWidth(dimTag) + 6;
-                int dh = 20;
+                    String clickerIdStr = (txtId != null && !txtId.getText().trim().isEmpty()) ? txtId.getText().trim() : "CLICKER";
+                    String dimTag = String.format(" Clicker %s: [%d, %d] -> [%d, %d] (%d x %d px) ",
+                            clickerIdStr, curX1, curY1, curX2, curY2, curX2 - curX1, curY2 - curY1);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                    FontMetrics dfm = g2.getFontMetrics();
+                    int dw = dfm.stringWidth(dimTag) + 6;
+                    int dh = 20;
 
-                int tagX = selSx1 + (selSw - dw) / 2;
-                int tagY = selSy2 + 4;
+                    int clampedDimX = Math.max(currentOffsetX + 4, Math.min(currentOffsetX + drawW - dw - 4, selSx1));
+                    int clampedDimY = Math.max(currentOffsetY + 4, Math.min(currentOffsetY + drawH - dh - 4, selSy2 + 6));
 
-                g2.setColor(new Color(25, 20, 5, 245));
-                g2.fillRoundRect(tagX, tagY, dw, dh, 6, 6);
-                g2.setColor(new Color(255, 215, 0));
-                g2.drawRoundRect(tagX, tagY, dw, dh, 6, 6);
-                g2.drawString(dimTag, tagX + 3, tagY + 14);
+                    g2.setColor(new Color(10, 15, 22, 235));
+                    g2.fillRoundRect(clampedDimX, clampedDimY, dw, dh, 6, 6);
+                    g2.setColor(new Color(255, 215, 0));
+                    g2.drawRoundRect(clampedDimX, clampedDimY, dw, dh, 6, 6);
+                    g2.setColor(Color.WHITE);
+                    g2.drawString(dimTag, clampedDimX + 4, clampedDimY + 14);
+                }
             }
 
             // Drop Hover Feedback
@@ -5266,3 +5318,4 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
     }
 }
+
