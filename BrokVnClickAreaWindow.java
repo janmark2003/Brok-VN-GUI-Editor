@@ -86,6 +86,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         public String type = "NORMAL";
         public String stayActive = "DEFAULT";
         public int layer = 0; // Layer index (0, 1, 2...)
+        public boolean visible = true; // Visibility in Editor & Canvas
         public Color color = new Color(0, 180, 255);
 
         public String toBrokVnScript() {
@@ -168,6 +169,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         // Depth priority (Automatic or Manual)
         public int depth = 1;
         public boolean autoDepth = true;
+        public boolean visible = true; // Visibility in Editor & Canvas
 
         // Spritesheet & Animation settings (Default Speed = 8 fps)
         public boolean isAnimation = false;
@@ -568,6 +570,8 @@ public class BrokVnClickAreaWindow extends JFrame {
     // Layer Management
     private DefaultTableModel layerTableModel;
     private JTable layerTable;
+    private JLabel lblLayerStats;
+    private boolean isRefreshingLayerTable = false;
 
     // Script Generator UI
     private JComboBox<String> cmbScriptGenMode;
@@ -2267,13 +2271,62 @@ public class BrokVnClickAreaWindow extends JFrame {
         panel.setBackground(cPanelBg);
         panel.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
-        JPanel topBar = new JPanel(new BorderLayout(6, 0));
-        topBar.setOpaque(false);
+        // Top Section: Header, Item Count & Visibility / Delete Actions
+        JPanel topContainer = new JPanel(new BorderLayout(0, 6));
+        topContainer.setOpaque(false);
+
+        JPanel topHeader = new JPanel(new BorderLayout(6, 0));
+        topHeader.setOpaque(false);
         JLabel lblHdr = new JLabel("Layer & Depth Manager");
         lblHdr.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lblHdr.setForeground(cTitle);
-        topBar.add(lblHdr, BorderLayout.WEST);
 
+        lblLayerStats = new JLabel("Items: 0 (0 Sprites, 0 Clickers)");
+        lblLayerStats.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        lblLayerStats.setForeground(cFgSubdued);
+
+        topHeader.add(lblHdr, BorderLayout.WEST);
+        topHeader.add(lblLayerStats, BorderLayout.EAST);
+
+        // Top Toolbar: Visibility and Deletion Buttons
+        JPanel topToolBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        topToolBar.setOpaque(false);
+
+        JButton btnToggleVis = new JButton("👁️ Toggle Visibility");
+        styleStandardButton(btnToggleVis);
+        btnToggleVis.setToolTipText("Toggle visibility of the selected Sprite or Clicker layer");
+        btnToggleVis.addActionListener(e -> toggleSelectedLayerVisibility());
+
+        JButton btnShowAll = new JButton("👁️ Show All");
+        styleStandardButton(btnShowAll);
+        btnShowAll.setToolTipText("Make all sprites and clickers visible on the editor canvas");
+        btnShowAll.addActionListener(e -> setAllLayersVisibility(true));
+
+        JButton btnHideAll = new JButton("🙈 Hide All");
+        styleStandardButton(btnHideAll);
+        btnHideAll.setToolTipText("Hide all sprites and clickers on the editor canvas");
+        btnHideAll.addActionListener(e -> setAllLayersVisibility(false));
+
+        JButton btnDeleteSelected = new JButton("🗑️ Delete Selected");
+        stylePrimaryButton(btnDeleteSelected, new Color(220, 53, 69)); // Danger Crimson
+        btnDeleteSelected.setToolTipText("Delete the selected Sprite or Clicker from the project");
+        btnDeleteSelected.addActionListener(e -> deleteSelectedLayerItem());
+
+        JButton btnDeleteLayer = new JButton("🗑️ Delete Entire Layer...");
+        styleStandardButton(btnDeleteLayer);
+        btnDeleteLayer.setToolTipText("Delete all clickers belonging to a specific layer number");
+        btnDeleteLayer.addActionListener(e -> deleteEntireLayerDialog());
+
+        topToolBar.add(btnToggleVis);
+        topToolBar.add(btnShowAll);
+        topToolBar.add(btnHideAll);
+        topToolBar.add(btnDeleteSelected);
+        topToolBar.add(btnDeleteLayer);
+
+        topContainer.add(topHeader, BorderLayout.NORTH);
+        topContainer.add(topToolBar, BorderLayout.SOUTH);
+
+        // Table with checkbox editor
         String[] cols = new String[] { "Type", "ID / Name", "Layer", "Depth", "Visible" };
         layerTableModel = new DefaultTableModel(cols, 0) {
             @Override
@@ -2295,59 +2348,148 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTable.setSelectionForeground(Color.WHITE);
         layerTable.setGridColor(cBorder);
 
+        // Column widths
+        layerTable.getColumnModel().getColumn(0).setPreferredWidth(130);
+        layerTable.getColumnModel().getColumn(1).setPreferredWidth(140);
+        layerTable.getColumnModel().getColumn(2).setPreferredWidth(50);
+        layerTable.getColumnModel().getColumn(3).setPreferredWidth(50);
+        layerTable.getColumnModel().getColumn(4).setPreferredWidth(60);
+
+        // Listener for checkbox clicks in Visible column
+        layerTableModel.addTableModelListener(e -> {
+            if (isRefreshingLayerTable) return;
+            int row = e.getFirstRow();
+            int col = e.getColumn();
+            if (col == 4 && row >= 0 && row < layerTableModel.getRowCount()) {
+                Boolean val = (Boolean) layerTableModel.getValueAt(row, 4);
+                String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+                String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+                boolean isVis = (val != null && val);
+                if (type.startsWith("Sprite")) {
+                    for (OverlayObject obj : overlayObjects) {
+                        if (obj.imageId.equals(id)) {
+                            obj.visible = isVis;
+                            break;
+                        }
+                    }
+                } else {
+                    for (ClickerDef def : savedClickers) {
+                        if (def.id.equals(id)) {
+                            def.visible = isVis;
+                            break;
+                        }
+                    }
+                }
+                if (canvas != null) canvas.repaint();
+            }
+        });
+
+        // Listener for row selection -> focuses object on canvas and switches editing mode
+        layerTable.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting() || isRefreshingLayerTable) return;
+            int row = layerTable.getSelectedRow();
+            if (row >= 0 && row < layerTableModel.getRowCount()) {
+                String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+                String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+                if (type.startsWith("Sprite")) {
+                    for (OverlayObject obj : overlayObjects) {
+                        if (obj.imageId.equals(id)) {
+                            activeOverlayObject = obj;
+                            activeEditTarget = ActiveEditTarget.IMAGE;
+                            if (btnTargetImage != null) btnTargetImage.setSelected(true);
+                            syncImageUiFromActiveObject();
+                            if (canvas != null) canvas.repaint();
+                            break;
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < savedClickers.size(); i++) {
+                        ClickerDef def = savedClickers.get(i);
+                        if (def.id.equals(id)) {
+                            selectedClickerIndex = i;
+                            activeEditTarget = ActiveEditTarget.CLICKER;
+                            if (btnTargetClicker != null) btnTargetClicker.setSelected(true);
+                            loadClickerDef(def);
+                            if (canvas != null) canvas.repaint();
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
         JScrollPane scroll = new JScrollPane(layerTable);
         scroll.setBorder(new LineBorder(cBorder, 1));
         scroll.getViewport().setBackground(cInputBg);
 
-        JPanel btnBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 4));
-        btnBar.setOpaque(false);
+        // Bottom Section: Depth Reordering & BrokVN Documentation Script Commands
+        JPanel bottomContainer = new JPanel(new GridLayout(2, 1, 0, 4));
+        bottomContainer.setOpaque(false);
 
-        JButton btnDisableLayer = new JButton("Copy CLICKERDISABLELAYER");
-        styleStandardButton(btnDisableLayer);
-        btnDisableLayer.addActionListener(e -> {
-            int row = layerTable.getSelectedRow();
-            int layerNum = 0;
-            if (row >= 0) {
-                try {
-                    layerNum = Integer.parseInt(layerTableModel.getValueAt(row, 2).toString());
-                } catch (Exception ignored) {}
-            }
-            String cmd = "CLICKERDISABLELAYER=" + layerNum;
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(cmd), null);
-            JOptionPane.showMessageDialog(this, "Copied: " + cmd, "Copied", JOptionPane.INFORMATION_MESSAGE);
-        });
+        // Row 1: Reordering and Refresh
+        JPanel reorderBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        reorderBar.setOpaque(false);
 
-        JButton btnEnableLayer = new JButton("Copy CLICKERENABLELAYER");
-        styleStandardButton(btnEnableLayer);
-        btnEnableLayer.addActionListener(e -> {
-            int row = layerTable.getSelectedRow();
-            int layerNum = 0;
-            if (row >= 0) {
-                try {
-                    layerNum = Integer.parseInt(layerTableModel.getValueAt(row, 2).toString());
-                } catch (Exception ignored) {}
-            }
-            String cmd = "CLICKERENABLELAYER=" + layerNum;
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(cmd), null);
-            JOptionPane.showMessageDialog(this, "Copied: " + cmd, "Copied", JOptionPane.INFORMATION_MESSAGE);
-        });
+        JButton btnDepthUp = new JButton("🔼 Depth/Layer +1");
+        styleStandardButton(btnDepthUp);
+        btnDepthUp.setToolTipText("Increase depth for selected Sprite or layer number for selected Clicker");
+        btnDepthUp.addActionListener(e -> moveSelectedDepth(1));
 
-        JButton btnRefreshLayers = new JButton("Refresh");
+        JButton btnDepthDown = new JButton("🔽 Depth/Layer -1");
+        styleStandardButton(btnDepthDown);
+        btnDepthDown.setToolTipText("Decrease depth for selected Sprite or layer number for selected Clicker");
+        btnDepthDown.addActionListener(e -> moveSelectedDepth(-1));
+
+        JButton btnRefreshLayers = new JButton("🔄 Refresh");
         styleStandardButton(btnRefreshLayers);
         btnRefreshLayers.addActionListener(e -> refreshLayerTable());
 
-        btnBar.add(btnDisableLayer);
-        btnBar.add(btnEnableLayer);
-        btnBar.add(btnRefreshLayers);
+        reorderBar.add(btnDepthUp);
+        reorderBar.add(btnDepthDown);
+        reorderBar.add(btnRefreshLayers);
 
-        panel.add(topBar, BorderLayout.NORTH);
+        // Row 2: Official BrokVN Script Commands Generator
+        JPanel scriptCmdBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        scriptCmdBar.setOpaque(false);
+
+        JButton btnCopyDisableLayer = new JButton("Copy CLICKERDISABLELAYER");
+        styleStandardButton(btnCopyDisableLayer);
+        btnCopyDisableLayer.addActionListener(e -> copyBrokVnCommand("CLICKERDISABLELAYER"));
+
+        JButton btnCopyEnableLayer = new JButton("Copy CLICKERENABLELAYER");
+        styleStandardButton(btnCopyEnableLayer);
+        btnCopyEnableLayer.addActionListener(e -> copyBrokVnCommand("CLICKERENABLELAYER"));
+
+        JButton btnCopyDeleteCmd = new JButton("Copy Delete Cmd");
+        styleStandardButton(btnCopyDeleteCmd);
+        btnCopyDeleteCmd.addActionListener(e -> copyBrokVnCommand("DELETE"));
+
+        JButton btnCopyMoveCmd = new JButton("Copy IMAGEMOVE");
+        styleStandardButton(btnCopyMoveCmd);
+        btnCopyMoveCmd.addActionListener(e -> copyBrokVnCommand("IMAGEMOVE"));
+
+        JButton btnCopyFadeCmd = new JButton("Copy IMAGEFADEOUT");
+        styleStandardButton(btnCopyFadeCmd);
+        btnCopyFadeCmd.addActionListener(e -> copyBrokVnCommand("IMAGEFADEOUT"));
+
+        scriptCmdBar.add(btnCopyDisableLayer);
+        scriptCmdBar.add(btnCopyEnableLayer);
+        scriptCmdBar.add(btnCopyDeleteCmd);
+        scriptCmdBar.add(btnCopyMoveCmd);
+        scriptCmdBar.add(btnCopyFadeCmd);
+
+        bottomContainer.add(reorderBar);
+        bottomContainer.add(scriptCmdBar);
+
+        panel.add(topContainer, BorderLayout.NORTH);
         panel.add(scroll, BorderLayout.CENTER);
-        panel.add(btnBar, BorderLayout.SOUTH);
+        panel.add(bottomContainer, BorderLayout.SOUTH);
         return panel;
     }
 
     private void refreshLayerTable() {
         if (layerTableModel == null) return;
+        isRefreshingLayerTable = true;
         layerTableModel.setRowCount(0);
 
         for (OverlayObject obj : overlayObjects) {
@@ -2356,19 +2498,250 @@ public class BrokVnClickAreaWindow extends JFrame {
                     obj.imageId,
                     "-",
                     String.valueOf(obj.getCalculatedDepth()),
-                    Boolean.TRUE
+                    obj.visible
             });
         }
 
         for (ClickerDef def : savedClickers) {
             layerTableModel.addRow(new Object[] {
-                    "Clicker",
+                    "Clicker (CLICKERNEW)",
                     def.id,
                     String.valueOf(def.layer),
                     "-",
-                    Boolean.TRUE
+                    def.visible
             });
         }
+
+        if (lblLayerStats != null) {
+            lblLayerStats.setText(String.format("Items: %d (%d Sprites, %d Clickers)",
+                    overlayObjects.size() + savedClickers.size(),
+                    overlayObjects.size(),
+                    savedClickers.size()));
+        }
+        isRefreshingLayerTable = false;
+    }
+
+    private void toggleSelectedLayerVisibility() {
+        int row = layerTable.getSelectedRow();
+        if (row < 0 || row >= layerTableModel.getRowCount()) {
+            JOptionPane.showMessageDialog(this, "Please select a layer or item from the table to toggle its visibility.", "No Selection", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+        String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+        if (type.startsWith("Sprite")) {
+            for (OverlayObject obj : overlayObjects) {
+                if (obj.imageId.equals(id)) {
+                    obj.visible = !obj.visible;
+                    break;
+                }
+            }
+        } else {
+            for (ClickerDef def : savedClickers) {
+                if (def.id.equals(id)) {
+                    def.visible = !def.visible;
+                    break;
+                }
+            }
+        }
+        refreshLayerTable();
+        if (row < layerTableModel.getRowCount()) {
+            layerTable.setRowSelectionInterval(row, row);
+        }
+        if (canvas != null) canvas.repaint();
+    }
+
+    private void setAllLayersVisibility(boolean visible) {
+        for (OverlayObject obj : overlayObjects) {
+            obj.visible = visible;
+        }
+        for (ClickerDef def : savedClickers) {
+            def.visible = visible;
+        }
+        refreshLayerTable();
+        if (canvas != null) canvas.repaint();
+    }
+
+    private void deleteSelectedLayerItem() {
+        int row = layerTable.getSelectedRow();
+        if (row < 0 || row >= layerTableModel.getRowCount()) {
+            JOptionPane.showMessageDialog(this, "Please select a Sprite or Clicker from the table to delete.", "No Selection", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+        String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to delete " + type + " '" + id + "' from the scene?",
+                "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        if (type.startsWith("Sprite")) {
+            OverlayObject target = null;
+            for (OverlayObject obj : overlayObjects) {
+                if (obj.imageId.equals(id)) {
+                    target = obj;
+                    break;
+                }
+            }
+            if (target != null) {
+                overlayObjects.remove(target);
+                if (activeOverlayObject == target) {
+                    activeOverlayObject = overlayObjects.isEmpty() ? null : overlayObjects.get(0);
+                }
+                syncImageUiFromActiveObject();
+                String delCmd = "IMAGEDEL=" + id;
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(delCmd), null);
+            }
+        } else {
+            ClickerDef target = null;
+            for (ClickerDef def : savedClickers) {
+                if (def.id.equals(id)) {
+                    target = def;
+                    break;
+                }
+            }
+            if (target != null) {
+                savedClickers.remove(target);
+                if (clickerTableModel != null) refreshClickerTable();
+                String delCmd = "CLICKERDEL=" + id;
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(delCmd), null);
+            }
+        }
+
+        refreshLayerTable();
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+    }
+
+    private void refreshClickerTable() {
+        if (clickerTableModel == null) return;
+        clickerTableModel.setRowCount(0);
+        for (ClickerDef d : savedClickers) {
+            clickerTableModel.addRow(new Object[] {
+                    d.id, d.layer, d.x1, d.y1, d.x2, d.y2,
+                    (d.x2 - d.x1) + "×" + (d.y2 - d.y1),
+                    d.event, d.text
+            });
+        }
+        if (rightTabbedPane != null && rightTabbedPane.getTabCount() > 3) {
+            rightTabbedPane.setTitleAt(3, "Clickers List (" + savedClickers.size() + ")");
+        }
+    }
+
+    private void deleteEntireLayerDialog() {
+        String input = JOptionPane.showInputDialog(this,
+                "Enter the Clicker Layer number to delete (e.g. 0, 1, 2...):",
+                "Delete Entire Layer", JOptionPane.QUESTION_MESSAGE);
+        if (input == null || input.trim().isEmpty()) return;
+
+        try {
+            int layerNum = Integer.parseInt(input.trim());
+            int prevSize = savedClickers.size();
+            savedClickers.removeIf(def -> def.layer == layerNum);
+            int removedCount = prevSize - savedClickers.size();
+
+            refreshLayerTable();
+            refreshClickerTable();
+            updateScriptPreview();
+            updateOverallBrokVnFile();
+            if (canvas != null) canvas.repaint();
+
+            String disableCmd = "CLICKERDISABLELAYER=" + layerNum;
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(disableCmd), null);
+
+            JOptionPane.showMessageDialog(this,
+                    String.format("Deleted %d clicker(s) on Layer %d.\n(Copied '%s' to clipboard)", removedCount, layerNum, disableCmd),
+                    "Layer Deleted", JOptionPane.INFORMATION_MESSAGE);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid numeric layer number.", "Invalid Input", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void moveSelectedDepth(int delta) {
+        int row = layerTable.getSelectedRow();
+        if (row < 0 || row >= layerTableModel.getRowCount()) return;
+        String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+        String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+
+        if (type.startsWith("Sprite")) {
+            for (OverlayObject obj : overlayObjects) {
+                if (obj.imageId.equals(id)) {
+                    obj.autoDepth = false;
+                    obj.depth = Math.max(0, obj.depth + delta);
+                    break;
+                }
+            }
+        } else {
+            for (ClickerDef def : savedClickers) {
+                if (def.id.equals(id)) {
+                    def.layer = Math.max(0, def.layer + delta);
+                    break;
+                }
+            }
+        }
+        refreshLayerTable();
+        if (row < layerTableModel.getRowCount()) {
+            layerTable.setRowSelectionInterval(row, row);
+        }
+        updateScriptPreview();
+        updateOverallBrokVnFile();
+        if (canvas != null) canvas.repaint();
+    }
+
+    private void copyBrokVnCommand(String cmdType) {
+        int row = layerTable.getSelectedRow();
+        String id = (row >= 0 && row < layerTableModel.getRowCount()) ? String.valueOf(layerTableModel.getValueAt(row, 1)) : "ITEM_ID";
+        int layerNum = 0;
+        int depthNum = 1;
+        String type = (row >= 0 && row < layerTableModel.getRowCount()) ? String.valueOf(layerTableModel.getValueAt(row, 0)) : "";
+
+        if (row >= 0 && row < layerTableModel.getRowCount()) {
+            try {
+                String lStr = String.valueOf(layerTableModel.getValueAt(row, 2));
+                if (!"-".equals(lStr)) layerNum = Integer.parseInt(lStr);
+            } catch (Exception ignored) {}
+            try {
+                String dStr = String.valueOf(layerTableModel.getValueAt(row, 3));
+                if (!"-".equals(dStr)) depthNum = Integer.parseInt(dStr);
+            } catch (Exception ignored) {}
+        }
+
+        String cmd = "";
+        switch (cmdType) {
+            case "CLICKERDISABLELAYER":
+                cmd = "CLICKERDISABLELAYER=" + layerNum;
+                break;
+            case "CLICKERENABLELAYER":
+                cmd = "CLICKERENABLELAYER=" + layerNum;
+                break;
+            case "DELETE":
+                if (type.startsWith("Sprite")) {
+                    cmd = "IMAGEDEL=" + id;
+                } else {
+                    cmd = "CLICKERDEL=" + id;
+                }
+                break;
+            case "IMAGEMOVE":
+                cmd = "IMAGEMOVE=" + id + "\n\tMOVEX=960\n\tMOVEY=540\n\tSPEED=3\n\tENDEVENT=S01_" + id + "_MOVED";
+                break;
+            case "IMAGEFADEOUT":
+                cmd = "IMAGEFADEOUT=" + id + ",3";
+                break;
+            case "IMAGEFADEIN":
+                cmd = "IMAGEFADEIN=" + id + ",3";
+                break;
+            case "IMAGEDEPTH":
+                cmd = "IMAGEDEPTH=" + id + "," + depthNum;
+                break;
+            default:
+                cmd = "# BrokVn Command";
+                break;
+        }
+
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(cmd), null);
+        JOptionPane.showMessageDialog(this, "Copied BrokVn Command to Clipboard:\n\n" + cmd, "Copied BrokVn Command", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void stepAnimationFrame(int delta) {
@@ -2611,6 +2984,7 @@ public class BrokVnClickAreaWindow extends JFrame {
             updateBoundsLabel();
             updateScriptPreview();
             updateOverallBrokVnFile();
+            refreshLayerTable();
             if (canvas != null) canvas.repaint();
             setTitle(APP_NAME + " - [Untitled Project]");
         }
@@ -2802,6 +3176,7 @@ public class BrokVnClickAreaWindow extends JFrame {
             updateBoundsLabel();
             updateScriptPreview();
             updateOverallBrokVnFile();
+            refreshLayerTable();
             if (canvas != null) canvas.repaint();
             JOptionPane.showMessageDialog(this, "Project loaded successfully:\n" + f.getName(), "Loaded", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
