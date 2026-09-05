@@ -5,7 +5,7 @@
   <br/>
   <p><b>Visual Novel Studio, Clickable Hotspot Mapper, Character Sprite & Multi-Waypoint Walk Path Designer for the Brok VN Engine</b></p>
 
-  [![Version](https://img.shields.io/badge/version-v2.0.0-00C3FF.svg?style=for-the-badge)](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases)
+  [![Version](https://img.shields.io/badge/version-v2.1.0-00C3FF.svg?style=for-the-badge)](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases)
   [![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue.svg?style=for-the-badge&logo=windows)](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases)
   [![Resolution](https://img.shields.io/badge/Native%20Resolution-1920%C3%971080-brightgreen.svg?style=for-the-badge)](https://github.com/janmark2003/Brok-VN-GUI-Editor)
   [![License](https://img.shields.io/badge/license-MIT-orange.svg?style=for-the-badge)](LICENSE)
@@ -165,9 +165,8 @@ EVENT=S01_SCENE_START
 ### 📦 Windows x64 Executable (`BrokVnGuiEditor.exe`)
 The software is distributed as a **fully self-contained Windows application**. **No Java installation, no batch (`.bat`) building, and no terminal commands are required.**
 
-1. **Download**: Grab the latest release package: [**`BrokVnGuiEditor-v2.0.0-windows-x64.zip`**](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases).
-2. **Extract**: Extract the `.zip` archive to any folder on your PC.
-3. **Launch**: Double-click **`BrokVnGuiEditor.exe`** to start the editor immediately.
+1. **Download**: Grab the latest release package: [**`BrokVnGuiEditorInstaller-v2.1.0.exe`**](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases) or portable [**`BrokVnGuiEditor-v2.1.0-windows-x64.zip`**](https://github.com/janmark2003/Brok-VN-GUI-Editor/releases).
+2. **Launch**: Run **`BrokVnGuiEditorInstaller-v2.1.0.exe`** to install or extract the portable archive and double-click **`BrokVnGuiEditor.exe`**.
 
 > **Note**: The application includes its own embedded, lightweight Windows runtime so it runs natively out-of-the-box on any Windows 10/11 system.
 

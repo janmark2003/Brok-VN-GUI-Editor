@@ -33,7 +33,7 @@ import java.util.prefs.Preferences;
 public class BrokVnClickAreaWindow extends JFrame {
 
     public static final String APP_NAME = "BrokVN GUI Editor";
-    public static final String APP_VERSION = "v2.0.0";
+    public static final String APP_VERSION = "v2.1.0";
     public static final String GITHUB_REPO = "janmark2003/Brok-VN-GUI-Editor";
     public static final String UPDATE_CHECK_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 
@@ -810,7 +810,13 @@ public class BrokVnClickAreaWindow extends JFrame {
     private JCheckBox chkShowGrid;
     private JCheckBox chkShowAllClickers;
     private JCheckBox chkShowWaypoints;
+    private JCheckBox chkShowImageModelTags;
     private JTabbedPane rightTabbedPane;
+
+    // Highlighted layer tracking for double-click feedback
+    private String highlightedLayerId = "";
+    private long highlightStartTime = 0;
+    private javax.swing.Timer highlightPulseTimer;
 
     // Palette tokens
     private Color cBg;
@@ -1335,21 +1341,27 @@ public class BrokVnClickAreaWindow extends JFrame {
         row2Right.setOpaque(false);
 
         chkShowOverlays = new JCheckBox("Show Sprites", true);
+        chkShowImageModelTags = new JCheckBox("Image Model Tags", true);
         chkShowGrid = new JCheckBox("Grid", true);
         chkShowAllClickers = new JCheckBox("Clicker Outlines", true);
         chkShowWaypoints = new JCheckBox("Waypoints", true);
 
         styleCheckBox(chkShowOverlays);
+        styleCheckBox(chkShowImageModelTags);
         styleCheckBox(chkShowGrid);
         styleCheckBox(chkShowAllClickers);
         styleCheckBox(chkShowWaypoints);
 
+        chkShowImageModelTags.setToolTipText("Show or hide IMAGEMODEL (and TEXTMODEL) tags on canvas objects");
+
         chkShowOverlays.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
+        chkShowImageModelTags.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
         chkShowGrid.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
         chkShowAllClickers.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
         chkShowWaypoints.addActionListener(e -> { if (canvas != null) canvas.repaint(); });
 
         row2Right.add(chkShowOverlays);
+        row2Right.add(chkShowImageModelTags);
         row2Right.add(chkShowGrid);
         row2Right.add(chkShowAllClickers);
         row2Right.add(chkShowWaypoints);
@@ -3327,16 +3339,101 @@ public class BrokVnClickAreaWindow extends JFrame {
         topContainer.add(topHeader, BorderLayout.NORTH);
         topContainer.add(topToolBar, BorderLayout.SOUTH);
 
-        // Table with Boolean columns for As Clicker and Visible
+        // Table with Boolean columns for As Clicker and Visible, editable Depth and Layer
         String[] cols = new String[] { "Type", "ID / Name", "Layer", "Depth", "As Clicker", "Visible" };
         layerTableModel = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
-                return false; // Non-editable directly so JTable internal cell editor never conflicts with instant mouse click handler
+                // Depth (col 3) and Layer (col 2) are directly editable in the table
+                return (c == 2 || c == 3);
             }
             @Override
             public Class<?> getColumnClass(int col) {
                 return (col == 4 || col == 5) ? Boolean.class : String.class;
+            }
+            @Override
+            public void setValueAt(Object aValue, int row, int col) {
+                if (row < 0 || row >= getRowCount()) return;
+                String valStr = (aValue != null) ? aValue.toString().trim() : "";
+                if (col == 3) { // Depth column
+                    try {
+                        int val = Integer.parseInt(valStr);
+                        if (val < 0) val = 0;
+                        String type = String.valueOf(getValueAt(row, 0));
+                        String id = String.valueOf(getValueAt(row, 1));
+                        if (type.startsWith("Sprite")) {
+                            for (OverlayObject obj : overlayObjects) {
+                                if (obj.imageId.equals(id)) {
+                                    obj.autoDepth = false;
+                                    obj.depth = val;
+                                    if (obj == activeOverlayObject) {
+                                        if (chkAutoDepth != null) chkAutoDepth.setSelected(false);
+                                        if (spImageDepth != null) {
+                                            spImageDepth.setEnabled(true);
+                                            spImageDepth.setValue(val);
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        } else if (type.startsWith("Text")) {
+                            for (TextObject txt : textObjects) {
+                                if (txt.id.equals(id)) {
+                                    txt.depth = val;
+                                    if (txt == activeTextObject && spTextDepth != null) {
+                                        spTextDepth.setValue(val);
+                                    }
+                                    break;
+                                }
+                            }
+                        } else if (type.startsWith("Clicker")) {
+                            for (ClickerDef def : savedClickers) {
+                                if (def.id.equals(id)) {
+                                    def.layer = val;
+                                    super.setValueAt(String.valueOf(val), row, 2);
+                                    if (selectedClickerIndex >= 0 && selectedClickerIndex < savedClickers.size()
+                                            && savedClickers.get(selectedClickerIndex) == def && spClickerLayer != null) {
+                                        spClickerLayer.setValue(val);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        super.setValueAt(String.valueOf(val), row, col);
+                        updateScriptPreview();
+                        updateOverallBrokVnFile();
+                        if (canvas != null) canvas.repaint();
+                    } catch (NumberFormatException ex) {
+                        // ignore invalid input, keep existing value
+                    }
+                } else if (col == 2) { // Layer column
+                    try {
+                        int val = Integer.parseInt(valStr);
+                        if (val < 0) val = 0;
+                        String type = String.valueOf(getValueAt(row, 0));
+                        String id = String.valueOf(getValueAt(row, 1));
+                        if (type.startsWith("Clicker")) {
+                            for (ClickerDef def : savedClickers) {
+                                if (def.id.equals(id)) {
+                                    def.layer = val;
+                                    if (selectedClickerIndex >= 0 && selectedClickerIndex < savedClickers.size()
+                                            && savedClickers.get(selectedClickerIndex) == def && spClickerLayer != null) {
+                                        spClickerLayer.setValue(val);
+                                    }
+                                    break;
+                                }
+                            }
+                            super.setValueAt(String.valueOf(val), row, col);
+                            updateScriptPreview();
+                            updateOverallBrokVnFile();
+                            if (canvas != null) canvas.repaint();
+                        }
+                    } catch (NumberFormatException ex) {
+                        // ignore
+                    }
+                } else {
+                    super.setValueAt(aValue, row, col);
+                }
             }
         };
 
@@ -3348,6 +3445,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTable.setSelectionBackground(new Color(0, 122, 255));
         layerTable.setSelectionForeground(Color.WHITE);
         layerTable.setGridColor(cBorder);
+        layerTable.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
 
         // Column widths
         layerTable.getColumnModel().getColumn(0).setPreferredWidth(125);
@@ -3357,8 +3455,40 @@ public class BrokVnClickAreaWindow extends JFrame {
         layerTable.getColumnModel().getColumn(4).setPreferredWidth(75);
         layerTable.getColumnModel().getColumn(5).setPreferredWidth(55);
 
-        // Instant, single-click mouse listener for As Clicker (col 4) and Visible (col 5)
+        // Center alignment for Layer and Depth columns
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        layerTable.getColumnModel().getColumn(2).setCellRenderer(centerRenderer);
+        layerTable.getColumnModel().getColumn(3).setCellRenderer(centerRenderer);
+
+        // Styled in-place cell editor for Layer and Depth (double-click to edit)
+        JTextField tfDepthEditor = new JTextField();
+        tfDepthEditor.setHorizontalAlignment(JTextField.CENTER);
+        tfDepthEditor.setBackground(cInputBg);
+        tfDepthEditor.setForeground(cFg);
+        tfDepthEditor.setCaretColor(cFg);
+        tfDepthEditor.setBorder(new LineBorder(new Color(0, 122, 255), 1));
+        DefaultCellEditor depthEditor = new DefaultCellEditor(tfDepthEditor);
+        depthEditor.setClickCountToStart(2);
+        layerTable.getColumnModel().getColumn(2).setCellEditor(depthEditor);
+        layerTable.getColumnModel().getColumn(3).setCellEditor(depthEditor);
+
+        // Mouse listener: single-click toggles checkboxes, double-click highlights layer on canvas
         layerTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int row = layerTable.rowAtPoint(e.getPoint());
+                    int col = layerTable.columnAtPoint(e.getPoint());
+                    if (row >= 0 && row < layerTableModel.getRowCount()) {
+                        String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+                        String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+                        // Double-click highlights the layer on canvas
+                        highlightLayer(id, type);
+                    }
+                }
+            }
+
             @Override
             public void mousePressed(MouseEvent e) {
                 int row = layerTable.rowAtPoint(e.getPoint());
@@ -3416,7 +3546,7 @@ public class BrokVnClickAreaWindow extends JFrame {
             }
         });
 
-        // Listener for row selection -> focuses and highlights object on canvas
+        // Listener for row selection -> focuses and highlights object on canvas WITHOUT switching tabs away from Layers!
         layerTable.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting() || isRefreshingLayerTable) return;
             int row = layerTable.getSelectedRow();
@@ -3431,7 +3561,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             if (btnTargetImage != null) btnTargetImage.setSelected(true);
                             if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
                             if (btnTargetText != null) btnTargetText.setSelected(false);
-                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(1);
                             hasActiveClicker = false;
                             syncImageUiFromActiveObject();
                             if (canvas != null) canvas.repaint();
@@ -3446,7 +3575,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             if (btnTargetText != null) btnTargetText.setSelected(true);
                             if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
                             if (btnTargetImage != null) btnTargetImage.setSelected(false);
-                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(2);
                             hasActiveClicker = false;
                             syncTextUiFromActiveObject();
                             if (canvas != null) canvas.repaint();
@@ -3462,7 +3590,6 @@ public class BrokVnClickAreaWindow extends JFrame {
                             if (btnTargetClicker != null) btnTargetClicker.setSelected(true);
                             if (btnTargetImage != null) btnTargetImage.setSelected(false);
                             if (btnTargetText != null) btnTargetText.setSelected(false);
-                            if (rightTabbedPane != null) rightTabbedPane.setSelectedIndex(0);
                             hasActiveClicker = true;
                             loadClickerDef(def);
                             if (canvas != null) canvas.repaint();
@@ -3481,7 +3608,7 @@ public class BrokVnClickAreaWindow extends JFrame {
         JPanel bottomContainer = new JPanel(new GridLayout(2, 1, 0, 4));
         bottomContainer.setOpaque(false);
 
-        // Row 1: Reordering and Refresh
+        // Row 1: Reordering, Set Depth, and Refresh
         JPanel reorderBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         reorderBar.setOpaque(false);
 
@@ -3495,12 +3622,18 @@ public class BrokVnClickAreaWindow extends JFrame {
         btnDepthDown.setToolTipText("Decrease depth for selected Sprite/Text or layer number for selected Clicker");
         btnDepthDown.addActionListener(e -> moveSelectedDepth(-1));
 
+        JButton btnSetDepth = new JButton("Set Depth...");
+        styleStandardButton(btnSetDepth);
+        btnSetDepth.setToolTipText("Directly enter an exact depth or layer number for the selected item");
+        btnSetDepth.addActionListener(e -> setDepthDialog());
+
         JButton btnRefreshLayers = new JButton("Refresh Table");
         styleStandardButton(btnRefreshLayers);
         btnRefreshLayers.addActionListener(e -> refreshLayerTable());
 
         reorderBar.add(btnDepthUp);
         reorderBar.add(btnDepthDown);
+        reorderBar.add(btnSetDepth);
         reorderBar.add(btnRefreshLayers);
 
         // Row 2: Official BrokVN Script Commands Generator
@@ -3809,6 +3942,149 @@ public class BrokVnClickAreaWindow extends JFrame {
         }
     }
 
+    private void setDepthDialog() {
+        int row = layerTable.getSelectedRow();
+        if (row < 0 || row >= layerTableModel.getRowCount()) {
+            JOptionPane.showMessageDialog(this, "Please select an item from the table first.", "No Selection", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String type = String.valueOf(layerTableModel.getValueAt(row, 0));
+        String id = String.valueOf(layerTableModel.getValueAt(row, 1));
+        boolean isClicker = type.startsWith("Clicker");
+        String currentVal = String.valueOf(layerTableModel.getValueAt(row, isClicker ? 2 : 3));
+        if ("-".equals(currentVal)) currentVal = "0";
+
+        String labelName = isClicker ? "Layer" : "Depth";
+        String input = JOptionPane.showInputDialog(this,
+                "Enter new " + labelName + " (>= 0) for " + id + ":", currentVal);
+        if (input != null && !input.trim().isEmpty()) {
+            try {
+                int newDepth = Integer.parseInt(input.trim());
+                if (newDepth < 0) newDepth = 0;
+                if (type.startsWith("Sprite")) {
+                    for (OverlayObject obj : overlayObjects) {
+                        if (obj.imageId.equals(id)) {
+                            obj.autoDepth = false;
+                            obj.depth = newDepth;
+                            if (obj == activeOverlayObject) {
+                                if (chkAutoDepth != null) chkAutoDepth.setSelected(false);
+                                if (spImageDepth != null) {
+                                    spImageDepth.setEnabled(true);
+                                    spImageDepth.setValue(newDepth);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                } else if (type.startsWith("Text")) {
+                    for (TextObject txt : textObjects) {
+                        if (txt.id.equals(id)) {
+                            txt.depth = newDepth;
+                            if (txt == activeTextObject && spTextDepth != null) {
+                                spTextDepth.setValue(newDepth);
+                            }
+                            break;
+                        }
+                    }
+                } else {
+                    for (ClickerDef def : savedClickers) {
+                        if (def.id.equals(id)) {
+                            def.layer = newDepth;
+                            if (selectedClickerIndex >= 0 && selectedClickerIndex < savedClickers.size()
+                                    && savedClickers.get(selectedClickerIndex) == def && spClickerLayer != null) {
+                                spClickerLayer.setValue(newDepth);
+                            }
+                            break;
+                        }
+                    }
+                }
+                refreshLayerTable();
+                if (row < layerTableModel.getRowCount()) {
+                    layerTable.setRowSelectionInterval(row, row);
+                }
+                updateScriptPreview();
+                updateOverallBrokVnFile();
+                if (canvas != null) canvas.repaint();
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Please enter a valid integer number.", "Invalid Number", JOptionPane.WARNING_MESSAGE);
+            }
+        }
+    }
+
+    private void highlightLayer(String id, String type) {
+        highlightedLayerId = id;
+        highlightStartTime = System.currentTimeMillis();
+
+        int targetEngX = 960;
+        int targetEngY = 540;
+
+        if (type.startsWith("Sprite")) {
+            for (OverlayObject obj : overlayObjects) {
+                if (obj.imageId.equals(id)) {
+                    activeOverlayObject = obj;
+                    activeEditTarget = ActiveEditTarget.IMAGE;
+                    if (btnTargetImage != null) btnTargetImage.setSelected(true);
+                    if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+                    if (btnTargetText != null) btnTargetText.setSelected(false);
+                    hasActiveClicker = false;
+                    syncImageUiFromActiveObject();
+                    targetEngX = obj.getAnchorX();
+                    targetEngY = obj.getAnchorY();
+                    break;
+                }
+            }
+        } else if (type.startsWith("Text")) {
+            for (TextObject txt : textObjects) {
+                if (txt.id.equals(id)) {
+                    activeTextObject = txt;
+                    activeEditTarget = ActiveEditTarget.TEXT;
+                    if (btnTargetText != null) btnTargetText.setSelected(true);
+                    if (btnTargetClicker != null) btnTargetClicker.setSelected(false);
+                    if (btnTargetImage != null) btnTargetImage.setSelected(false);
+                    hasActiveClicker = false;
+                    syncTextUiFromActiveObject();
+                    targetEngX = txt.x;
+                    targetEngY = txt.y;
+                    break;
+                }
+            }
+        } else {
+            for (int i = 0; i < savedClickers.size(); i++) {
+                ClickerDef def = savedClickers.get(i);
+                if (def.id.equals(id)) {
+                    selectedClickerIndex = i;
+                    activeEditTarget = ActiveEditTarget.CLICKER;
+                    if (btnTargetClicker != null) btnTargetClicker.setSelected(true);
+                    if (btnTargetImage != null) btnTargetImage.setSelected(false);
+                    if (btnTargetText != null) btnTargetText.setSelected(false);
+                    hasActiveClicker = true;
+                    loadClickerDef(def);
+                    targetEngX = (def.x1 + def.x2) / 2;
+                    targetEngY = (def.y1 + def.y2) / 2;
+                    break;
+                }
+            }
+        }
+
+        if (canvas != null) {
+            canvas.centerOnEngineCoords(targetEngX, targetEngY);
+        }
+
+        if (highlightPulseTimer != null && highlightPulseTimer.isRunning()) {
+            highlightPulseTimer.stop();
+        }
+        highlightPulseTimer = new javax.swing.Timer(30, e -> {
+            long elapsed = System.currentTimeMillis() - highlightStartTime;
+            if (elapsed > 2000) {
+                highlightedLayerId = "";
+                ((javax.swing.Timer) e.getSource()).stop();
+            }
+            if (canvas != null) canvas.repaint();
+        });
+        highlightPulseTimer.start();
+        if (canvas != null) canvas.repaint();
+    }
+
     private void moveSelectedDepth(int delta) {
         int row = layerTable.getSelectedRow();
         if (row < 0 || row >= layerTableModel.getRowCount()) return;
@@ -3818,8 +4094,16 @@ public class BrokVnClickAreaWindow extends JFrame {
         if (type.startsWith("Sprite")) {
             for (OverlayObject obj : overlayObjects) {
                 if (obj.imageId.equals(id)) {
+                    int base = obj.autoDepth ? obj.getCalculatedDepth() : obj.depth;
                     obj.autoDepth = false;
-                    obj.depth = Math.max(0, obj.depth + delta);
+                    obj.depth = Math.max(0, base + delta);
+                    if (obj == activeOverlayObject) {
+                        if (chkAutoDepth != null) chkAutoDepth.setSelected(false);
+                        if (spImageDepth != null) {
+                            spImageDepth.setEnabled(true);
+                            spImageDepth.setValue(obj.depth);
+                        }
+                    }
                     break;
                 }
             }
@@ -3827,6 +4111,9 @@ public class BrokVnClickAreaWindow extends JFrame {
             for (TextObject txt : textObjects) {
                 if (txt.id.equals(id)) {
                     txt.depth = Math.max(0, txt.depth + delta);
+                    if (txt == activeTextObject && spTextDepth != null) {
+                        spTextDepth.setValue(txt.depth);
+                    }
                     break;
                 }
             }
@@ -3834,6 +4121,10 @@ public class BrokVnClickAreaWindow extends JFrame {
             for (ClickerDef def : savedClickers) {
                 if (def.id.equals(id)) {
                     def.layer = Math.max(0, def.layer + delta);
+                    if (selectedClickerIndex >= 0 && selectedClickerIndex < savedClickers.size()
+                            && savedClickers.get(selectedClickerIndex) == def && spClickerLayer != null) {
+                        spClickerLayer.setValue(def.layer);
+                    }
                     break;
                 }
             }
@@ -4512,6 +4803,7 @@ public class BrokVnClickAreaWindow extends JFrame {
 
                         hoveredClickerText = "";
                         for (ClickerDef d : savedClickers) {
+                            if (!d.visible) continue;
                             if (mouseEngX >= d.x1 && mouseEngX <= d.x2 && mouseEngY >= d.y1 && mouseEngY <= d.y2) {
                                 hoveredClickerText = (d.text != null && !d.text.isEmpty()) ? d.text : d.id;
                                 break;
@@ -4553,7 +4845,10 @@ public class BrokVnClickAreaWindow extends JFrame {
                     g2.fillRect(offX, offY, drawW, drawH);
                 }
 
-                for (OverlayObject obj : overlayObjects) {
+                List<OverlayObject> fsOverlays = new ArrayList<>(overlayObjects);
+                fsOverlays.sort((o1, o2) -> Integer.compare(o1.getCalculatedDepth(), o2.getCalculatedDepth()));
+                for (OverlayObject obj : fsOverlays) {
+                    if (!obj.visible) continue;
                     BufferedImage frame = obj.getCurrentFrame();
                     if (frame != null) {
                         int sx = offX + (int) Math.round(obj.x * scale);
@@ -4566,6 +4861,42 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.drawImage(frame, sx, sy, sw, sh, null);
                         }
                     }
+                }
+
+                // Render visible text in full screen preview
+                for (TextObject txt : textObjects) {
+                    if (!txt.visible) continue;
+                    int tx = offX + (int) Math.round(txt.x * scale);
+                    int ty = offY + (int) Math.round(txt.y * scale);
+
+                    Font f = new Font("Segoe UI", Font.BOLD, (int) Math.round(18 * scale));
+                    if ("FONT_TITLE".equalsIgnoreCase(txt.font)) {
+                        f = new Font("Segoe UI", Font.BOLD, (int) Math.round(28 * scale));
+                    } else if ("FONT_SUBTITLE".equalsIgnoreCase(txt.font)) {
+                        f = new Font("Segoe UI", Font.BOLD, (int) Math.round(22 * scale));
+                    } else if ("FONT_BIG".equalsIgnoreCase(txt.font)) {
+                        f = new Font("Segoe UI", Font.BOLD, (int) Math.round(20 * scale));
+                    } else if ("FONT_SMALL".equalsIgnoreCase(txt.font)) {
+                        f = new Font("Segoe UI", Font.PLAIN, (int) Math.round(14 * scale));
+                    }
+                    g2.setFont(f);
+                    FontMetrics tfm = g2.getFontMetrics();
+                    String displayStr = (txt.text != null && !txt.text.isEmpty()) ? txt.text : txt.id;
+                    int strW = tfm.stringWidth(displayStr);
+                    int drawTextX = tx;
+                    if ("CENTER".equalsIgnoreCase(txt.alignH)) {
+                        drawTextX = tx - strW / 2;
+                    } else if ("RIGHT".equalsIgnoreCase(txt.alignH)) {
+                        drawTextX = tx - strW;
+                    }
+                    int drawTextY = ty;
+
+                    // Drop shadow
+                    g2.setColor(new Color(0, 0, 0, 220));
+                    g2.drawString(displayStr, drawTextX + 2, drawTextY + 2);
+                    // Foreground
+                    g2.setColor(txt.getAwtColor());
+                    g2.drawString(displayStr, drawTextX, drawTextY);
                 }
 
                 if (!hoveredClickerText.isEmpty()) {
@@ -6581,6 +6912,12 @@ public class BrokVnClickAreaWindow extends JFrame {
             return currentOffsetY + (int) Math.round(engY * currentScale);
         }
 
+        public void centerOnEngineCoords(int engX, int engY) {
+            panOffsetX = (int) Math.round((960.0 - engX) * currentScale);
+            panOffsetY = (int) Math.round((540.0 - engY) * currentScale);
+            repaint();
+        }
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
@@ -6663,8 +7000,31 @@ public class BrokVnClickAreaWindow extends JFrame {
                             g2.drawOval(ax - 4, ay - 4, 8, 8);
                         }
 
-                        // IMAGEMODEL Clicker Badge on sprite
-                        if (obj.isImageModelClicker) {
+                        // Double-click layer highlight effect
+                        if (highlightedLayerId != null && !highlightedLayerId.isEmpty() && obj.imageId.equals(highlightedLayerId)) {
+                            long elapsed = System.currentTimeMillis() - highlightStartTime;
+                            float pulse = (float) Math.sin((elapsed % 600) / 600.0 * Math.PI);
+                            int pad = (int) (8 + pulse * 10);
+                            g2.setColor(new Color(255, 215, 0, (int) (140 + pulse * 100)));
+                            g2.setStroke(new BasicStroke(3.0f + pulse * 2.0f));
+                            g2.drawRoundRect(sx - pad, sy - pad, sw + pad * 2, sh + pad * 2, 12, 12);
+
+                            String beaconTxt = "✦ HIGHLIGHTED: " + obj.imageId + " ✦";
+                            g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                            FontMetrics bfm = g2.getFontMetrics();
+                            int bw = bfm.stringWidth(beaconTxt) + 16;
+                            int bx = sx + (sw - bw) / 2;
+                            int by = Math.max(currentOffsetY + 6, sy - 28);
+                            g2.setColor(new Color(20, 25, 35, 230));
+                            g2.fillRoundRect(bx, by, bw, 22, 8, 8);
+                            g2.setColor(new Color(255, 220, 0));
+                            g2.setStroke(new BasicStroke(1.5f));
+                            g2.drawRoundRect(bx, by, bw, 22, 8, 8);
+                            g2.drawString(beaconTxt, bx + 8, by + 16);
+                        }
+
+                        // IMAGEMODEL Clicker Badge on sprite (can be hidden/unhidden via top bar checkbox)
+                        if (obj.isImageModelClicker && (chkShowImageModelTags == null || chkShowImageModelTags.isSelected())) {
                             String imgBadge = "[IMAGEMODEL: " + (obj.clickerId != null && !obj.clickerId.isEmpty() ? obj.clickerId : "CLICK_" + obj.imageId) + "]";
                             g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
                             FontMetrics ibfm = g2.getFontMetrics();
@@ -6893,8 +7253,31 @@ public class BrokVnClickAreaWindow extends JFrame {
                     g2.drawOval(tx - 3, ty - 3, 6, 6);
                 }
 
-                // Attached TEXTMODEL Clicker badge with hover text & highlight indicator
-                if (txt.isTextModelClicker) {
+                // Double-click layer highlight effect for text
+                if (highlightedLayerId != null && !highlightedLayerId.isEmpty() && txt.id.equals(highlightedLayerId)) {
+                    long elapsed = System.currentTimeMillis() - highlightStartTime;
+                    float pulse = (float) Math.sin((elapsed % 600) / 600.0 * Math.PI);
+                    int pad = (int) (8 + pulse * 10);
+                    g2.setColor(new Color(255, 0, 220, (int) (140 + pulse * 100)));
+                    g2.setStroke(new BasicStroke(3.0f + pulse * 2.0f));
+                    g2.drawRoundRect(drawTextX - pad - 6, drawTextY - tfm.getAscent() - pad - 3, strW + 12 + pad * 2, strH + 6 + pad * 2, 12, 12);
+
+                    String beaconTxt = "✦ HIGHLIGHTED: " + txt.id + " ✦";
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                    FontMetrics bfm = g2.getFontMetrics();
+                    int bw = bfm.stringWidth(beaconTxt) + 16;
+                    int bx = drawTextX + (strW - bw) / 2;
+                    int by = Math.max(currentOffsetY + 6, drawTextY - tfm.getAscent() - 28);
+                    g2.setColor(new Color(20, 25, 35, 230));
+                    g2.fillRoundRect(bx, by, bw, 22, 8, 8);
+                    g2.setColor(new Color(255, 0, 220));
+                    g2.setStroke(new BasicStroke(1.5f));
+                    g2.drawRoundRect(bx, by, bw, 22, 8, 8);
+                    g2.drawString(beaconTxt, bx + 8, by + 16);
+                }
+
+                // Attached TEXTMODEL Clicker badge with hover text & highlight indicator (can be hidden/unhidden via top bar checkbox)
+                if (txt.isTextModelClicker && (chkShowImageModelTags == null || chkShowImageModelTags.isSelected())) {
                     StringBuilder badgeSb = new StringBuilder("[TEXTMODEL: ");
                     badgeSb.append(txt.clickerId != null && !txt.clickerId.isEmpty() ? txt.clickerId : "CLICK_" + txt.id);
                     if (txt.clickerHighlight) {
@@ -6968,6 +7351,29 @@ public class BrokVnClickAreaWindow extends JFrame {
                         g2.setColor(c);
                         g2.setStroke(new BasicStroke(1.5f));
                         g2.drawRect(sx1, sy1, sw, sh);
+                    }
+
+                    // Double-click layer highlight effect for clicker
+                    if (highlightedLayerId != null && !highlightedLayerId.isEmpty() && d.id.equals(highlightedLayerId)) {
+                        long elapsed = System.currentTimeMillis() - highlightStartTime;
+                        float pulse = (float) Math.sin((elapsed % 600) / 600.0 * Math.PI);
+                        int pad = (int) (8 + pulse * 10);
+                        g2.setColor(new Color(255, 220, 0, (int) (140 + pulse * 100)));
+                        g2.setStroke(new BasicStroke(3.0f + pulse * 2.0f));
+                        g2.drawRoundRect(sx1 - pad, sy1 - pad, sw + pad * 2, sh + pad * 2, 10, 10);
+
+                        String beaconTxt = "✦ HIGHLIGHTED: " + d.id + " ✦";
+                        g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                        FontMetrics bfm = g2.getFontMetrics();
+                        int bw = bfm.stringWidth(beaconTxt) + 16;
+                        int bx = sx1 + (sw - bw) / 2;
+                        int by = Math.max(currentOffsetY + 6, sy1 - 28);
+                        g2.setColor(new Color(20, 25, 35, 230));
+                        g2.fillRoundRect(bx, by, bw, 22, 8, 8);
+                        g2.setColor(new Color(255, 220, 0));
+                        g2.setStroke(new BasicStroke(1.5f));
+                        g2.drawRoundRect(bx, by, bw, 22, 8, 8);
+                        g2.drawString(beaconTxt, bx + 8, by + 16);
                     }
 
                     g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
